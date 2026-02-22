@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@evenrealities/even_hub_sdk": "^0.1.8"
+    "@evenrealities/even_hub_sdk": "^0.0.7"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

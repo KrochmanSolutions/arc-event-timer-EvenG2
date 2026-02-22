@@ -49,6 +49,10 @@ npm start
 - **Backend**: Node.js + Hono
 - **Data**: MetaForge API
 
+## Attribution
+
+Event data provided by [MetaForge](https://metaforge.app/arc-raiders).
+
 ## Deployment
 
 Deploy to Vercel:

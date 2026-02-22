@@ -831,12 +831,10 @@ async function showSplashAnimation(): Promise<void> {
     })
   );
   
-  // Keep logo at natural size, just move from center to top
-  const logoWidth = logoImage.width;
-  const logoHeight = logoImage.height;
-  const startX = (CANVAS_WIDTH - logoWidth) / 2;
-  const startY = (CANVAS_HEIGHT - logoHeight) / 2;
-  const endX = (CANVAS_WIDTH - logoWidth) / 2;
+  // Use LOGO_WIDTH/HEIGHT to match final screen position exactly
+  const startX = (CANVAS_WIDTH - LOGO_WIDTH) / 2;
+  const startY = (CANVAS_HEIGHT - LOGO_HEIGHT) / 2;
+  const endX = Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2);
   const endY = 4;
   
   const moveFrames = 20;
@@ -857,7 +855,7 @@ async function showSplashAnimation(): Promise<void> {
       
       moveCtx.fillStyle = '#000000';
       moveCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      moveCtx.drawImage(logoImage, currentX, currentY);
+      moveCtx.drawImage(logoImage, currentX, currentY, LOGO_WIDTH, LOGO_HEIGHT);
       
       const base64 = moveCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
       await bridge.updateImageRawData(

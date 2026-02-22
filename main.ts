@@ -18,7 +18,7 @@ const HEADER_HEIGHT = 50;
 const LOGO_WIDTH = 200;
 const LOGO_HEIGHT = 44;
 const LIST_Y_OFFSET = HEADER_HEIGHT + 4;
-const METAFORGE_API = 'https://metaforge.app/api/arc-raiders';
+const API_BASE = import.meta.env.DEV ? 'http://localhost:3001' : '';
 const REFRESH_INTERVAL = 60000;
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const MAX_LIST_ITEMS = 20;
@@ -212,8 +212,8 @@ async function sendNavControls(id: number, name: string): Promise<void> {
 
 // Data fetching
 async function fetchEvents(): Promise<void> {
-  const res = await fetch(`${METAFORGE_API}/events-schedule`);
-  if (!res.ok) throw new Error(`MetaForge API error: ${res.status}`);
+  const res = await fetch(`${API_BASE}/api/events`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
   
   const data = await res.json();
   const events: GameEvent[] = data.events || data.data || [];

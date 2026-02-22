@@ -1,0 +1,27 @@
+{
+  "name": "arc-event-timer",
+  "version": "1.0.0",
+  "description": "Arc Raiders Event Timer for Even Realities G2",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node server/src/index.js"
+  },
+  "dependencies": {
+    "@aspect-build/rules_js": "^2.3.7",
+    "@aspect-build/rules_ts": "^3.5.2",
+    "@aspect-build/rules_rollup": "^2.1.0",
+    "@aspect-build/rules_esbuild": "^0.23.2",
+    "@aspect-build/rules_swc": "^2.3.2",
+    "@aspect-build/rules_webpack": "^0.19.0",
+    "@aspect-build/rules_jest": "^0.22.0",
+    "@aspect-build/rules_terser": "^2.1.0",
+    "@evenrealities/even_hub_sdk": "^0.1.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  }
+}

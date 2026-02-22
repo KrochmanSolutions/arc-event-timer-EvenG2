@@ -1,0 +1,18 @@
+{
+  "package_id": "com.arcraiders.eventtimer",
+  "edition": "202602",
+  "name": "ARC Event Timers",
+  "version": "1.0.0",
+  "min_app_version": "0.1.0",
+  "icon": "app-icon.png",
+  "tagline": "Upcoming game events at a glance",
+  "description": "Displays current and upcoming ARC Raiders events for the next 12 hours. Features favorites, auto-launch settings, and paginated event lists.",
+  "author": "",
+  "entrypoint": "index.html",
+  "permissions": {
+    "network": [
+      "*"
+    ],
+    "fs": []
+  }
+}

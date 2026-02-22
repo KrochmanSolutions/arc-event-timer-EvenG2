@@ -142,7 +142,7 @@ function formatEventShort(event: GameEvent): string {
 async function sendHeaderImage(containerId: number = 2): Promise<void> {
   if (!bridge) return;
   try {
-    const response = await fetch('./assets/header.png');
+    const response = await fetch('/header.png');
     const arrayBuffer = await response.arrayBuffer();
     const imageData = Array.from(new Uint8Array(arrayBuffer));
     await bridge.updateImageRawData(
@@ -743,7 +743,7 @@ async function showSplashAnimation(): Promise<void> {
   
   let logoImage: HTMLImageElement;
   try {
-    logoImage = await loadImage('./assets/header.png');
+    logoImage = await loadImage('/header.png');
   } catch (err) {
     return;
   }
@@ -840,7 +840,7 @@ async function showSplashAnimation(): Promise<void> {
       })
     );
     
-    const response = await fetch('./assets/header.png');
+    const response = await fetch('/header.png');
     const arrayBuffer = await response.arrayBuffer();
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({

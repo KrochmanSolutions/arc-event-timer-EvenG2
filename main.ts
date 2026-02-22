@@ -814,55 +814,42 @@ async function showSplashAnimation(): Promise<void> {
     }
   }
   
-  // Animate to header position using full-screen canvas (no rebuildPageContainer flashing)
-  await bridge.rebuildPageContainer(
-    new RebuildPageContainer({
-      containerTotalNum: 1,
-      imageObject: [
-        new ImageContainerProperty({
-          containerID: 1,
-          containerName: 'splash-logo',
-          xPosition: 0,
-          yPosition: 0,
-          width: CANVAS_WIDTH,
-          height: CANVAS_HEIGHT,
-        }),
-      ],
-    })
-  );
-  
-  // Use LOGO_WIDTH/HEIGHT to match final screen position exactly
-  const startX = (CANVAS_WIDTH - LOGO_WIDTH) / 2;
-  const startY = (CANVAS_HEIGHT - LOGO_HEIGHT) / 2;
+  // Animate to header position
+  const startX = Math.floor((CANVAS_WIDTH - SPLASH_WIDTH) / 2);
+  const startY = Math.floor((CANVAS_HEIGHT - SPLASH_HEIGHT) / 2);
   const endX = Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2);
   const endY = 4;
   
-  const moveFrames = 20;
-  const moveDelay = 35;
-  
-  const moveCanvas = document.createElement('canvas');
-  moveCanvas.width = CANVAS_WIDTH;
-  moveCanvas.height = CANVAS_HEIGHT;
-  const moveCtx = moveCanvas.getContext('2d');
-  
-  if (moveCtx) {
-    for (let i = 1; i <= moveFrames; i++) {
-      const t = i / moveFrames;
-      const ease = 1 - Math.pow(1 - t, 3);
-      
-      const currentX = startX + (endX - startX) * ease;
-      const currentY = startY + (endY - startY) * ease;
-      
-      moveCtx.fillStyle = '#000000';
-      moveCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      moveCtx.drawImage(logoImage, currentX, currentY, LOGO_WIDTH, LOGO_HEIGHT);
-      
-      const base64 = moveCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
-      await bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageFormat: 'png', imageData: base64 })
-      );
-      await sleep(moveDelay);
-    }
+  for (let i = 1; i <= 8; i++) {
+    const t = i / 8;
+    const ease = 1 - Math.pow(1 - t, 3);
+    
+    await bridge.rebuildPageContainer(
+      new RebuildPageContainer({
+        containerTotalNum: 1,
+        imageObject: [
+          new ImageContainerProperty({
+            containerID: 1,
+            containerName: 'splash-logo',
+            xPosition: Math.floor(startX + (endX - startX) * ease),
+            yPosition: Math.floor(startY + (endY - startY) * ease),
+            width: Math.floor(SPLASH_WIDTH + (LOGO_WIDTH - SPLASH_WIDTH) * ease),
+            height: Math.floor(SPLASH_HEIGHT + (LOGO_HEIGHT - SPLASH_HEIGHT) * ease),
+          }),
+        ],
+      })
+    );
+    
+    const response = await fetch('/header.png');
+    const arrayBuffer = await response.arrayBuffer();
+    await bridge.updateImageRawData(
+      new ImageRawDataUpdate({
+        containerID: 1,
+        containerName: 'splash-logo',
+        imageData: Array.from(new Uint8Array(arrayBuffer)),
+      })
+    );
+    await sleep(60);
   }
   
   await sleep(100);

@@ -831,14 +831,13 @@ async function showSplashAnimation(): Promise<void> {
     })
   );
   
-  const startLogoWidth = SPLASH_WIDTH;
-  const startLogoHeight = SPLASH_HEIGHT;
-  const endLogoWidth = LOGO_WIDTH;
-  const endLogoHeight = LOGO_HEIGHT;
-  const startCenterX = CANVAS_WIDTH / 2;
-  const startCenterY = CANVAS_HEIGHT / 2;
-  const endCenterX = CANVAS_WIDTH / 2;
-  const endCenterY = 4 + LOGO_HEIGHT / 2;
+  // Keep logo at natural size, just move from center to top
+  const logoWidth = logoImage.width;
+  const logoHeight = logoImage.height;
+  const startX = (CANVAS_WIDTH - logoWidth) / 2;
+  const startY = (CANVAS_HEIGHT - logoHeight) / 2;
+  const endX = (CANVAS_WIDTH - logoWidth) / 2;
+  const endY = 4;
   
   const moveFrames = 20;
   const moveDelay = 35;
@@ -853,17 +852,12 @@ async function showSplashAnimation(): Promise<void> {
       const t = i / moveFrames;
       const ease = 1 - Math.pow(1 - t, 3);
       
-      const currentWidth = startLogoWidth + (endLogoWidth - startLogoWidth) * ease;
-      const currentHeight = startLogoHeight + (endLogoHeight - startLogoHeight) * ease;
-      const currentCenterX = startCenterX + (endCenterX - startCenterX) * ease;
-      const currentCenterY = startCenterY + (endCenterY - startCenterY) * ease;
-      
-      const drawX = currentCenterX - currentWidth / 2;
-      const drawY = currentCenterY - currentHeight / 2;
+      const currentX = startX + (endX - startX) * ease;
+      const currentY = startY + (endY - startY) * ease;
       
       moveCtx.fillStyle = '#000000';
       moveCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      moveCtx.drawImage(logoImage, drawX, drawY, currentWidth, currentHeight);
+      moveCtx.drawImage(logoImage, currentX, currentY);
       
       const base64 = moveCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
       await bridge.updateImageRawData(

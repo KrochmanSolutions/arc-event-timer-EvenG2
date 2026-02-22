@@ -35,19 +35,10 @@ cd /path/to/even-dev
 APP_PATH=/path/to/arc-event-timer ./start-even.sh
 ```
 
-### Run backend server
-
-```bash
-cd server
-npm install
-npm start
-```
-
 ## Tech Stack
 
 - **Frontend**: TypeScript + Vite + Even Hub SDK
-- **Backend**: Node.js + Hono
-- **Data**: MetaForge API
+- **Data**: [MetaForge API](https://metaforge.app/arc-raiders)
 
 ## Attribution
 

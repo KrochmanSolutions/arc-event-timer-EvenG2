@@ -339,11 +339,6 @@ async function sendHeaderWithHint(): Promise<void> {
     const logoX = (LOGO_WIDTH - logoW) / 2;
     ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
     
-    // Draw hint text below/beside logo
-    ctx.fillStyle = '#888888';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText('2x Tap=Refresh', LOGO_WIDTH - 4, 44);
     
     const base64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
     await bridge.updateImageRawData(
@@ -375,6 +370,13 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
     ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('CURRENT', 4, 14);
+    
+    // Hint (same line as CURRENT, right-aligned)
+    ctx.fillStyle = '#888888';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('2x Tap=Refresh', tileW - 4, 14);
+    ctx.textAlign = 'left';
     
     // Divider
     ctx.strokeStyle = '#444444';

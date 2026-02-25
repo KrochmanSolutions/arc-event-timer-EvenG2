@@ -617,10 +617,7 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
     })
   );
   
-  await renderEventTypesContent(totalPages);
-  
-  // Start scroll animation timer for long names (3 second delay, synced reset)
-  // Clear any existing timers first
+  // Clear any existing timers and reset scroll state BEFORE rendering
   if (eventTypesScrollDelay) {
     clearTimeout(eventTypesScrollDelay);
     eventTypesScrollDelay = null;
@@ -630,6 +627,8 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
     eventTypesScrollTimer = null;
   }
   eventTypesScrollOffset = 0;
+  
+  await renderEventTypesContent(totalPages);
   
   // Calculate max scroll steps needed (longest item determines cycle)
   const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;

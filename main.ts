@@ -559,6 +559,8 @@ async function displaySettingsAutoLaunch(): Promise<void> {
 let eventTypesPage = 0;
 let eventTypesSelectedIdx = 0; // 0 = Back, 1+ = event types
 const EVENT_TYPES_PER_PAGE = 6;
+let eventTypesScrollOffset = 0;
+let eventTypesScrollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function displaySettingsEventTypes(page: number = 0, preserveSelection: boolean = false): Promise<void> {
   if (!bridge) return;
@@ -605,6 +607,7 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
         new TextContainerProperty({
           containerID: 4,
           containerName: 'event-capture',
+          content: ' ',
           xPosition: 0, yPosition: 0,
           width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
           isEventCapture: 1,
@@ -614,6 +617,19 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   );
   
   await renderEventTypesContent(totalPages);
+  
+  // Start scroll animation timer for long names
+  if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
+  eventTypesScrollOffset = 0;
+  eventTypesScrollTimer = setInterval(async () => {
+    if (currentScreen !== 'settings-event-types') {
+      if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
+      eventTypesScrollTimer = null;
+      return;
+    }
+    eventTypesScrollOffset++;
+    await renderEventTypesContent();
+  }, 500);
 }
 
 // Render content as tiled images (max 200x100 each per G2 constraints)
@@ -652,8 +668,9 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
     ctx.fillText('2x Tap to Save', fullWidth - 8, 6);
     ctx.textAlign = 'left';
     
-    ctx.font = 'bold 16px monospace';
+    ctx.font = '14px monospace';
     let y = 30;
+    const maxDisplayLen = 12;
     
     // Draw event types with checkboxes
     for (let i = 0; i < pageEventTypes.length; i++) {
@@ -661,20 +678,29 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
       const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
       const isSelected = eventTypesSelectedIdx === i;
       
-      // Outline if selected
+      // Outline if selected (constrain to left 196px to fit within tile coverage)
       if (isSelected) {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        ctx.strokeRect(2, y - 2, fullWidth - 4, rowHeight);
+        ctx.strokeRect(2, y - 2, 196, rowHeight);
       }
       
       // Checkbox
       ctx.fillStyle = isChecked ? '#00ff00' : '#666666';
       ctx.fillText(isChecked ? '[X]' : '[ ]', 8, y);
       
-      // Event name
+      // Event name with scrolling for long names
       ctx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
-      ctx.fillText(eventType, 48, y);
+      let displayName: string;
+      if (eventType.length <= maxDisplayLen) {
+        displayName = eventType;
+      } else {
+        // Scrolling text effect - rotate through characters
+        const scrollText = eventType + '   ' + eventType;
+        const offset = eventTypesScrollOffset % (eventType.length + 3);
+        displayName = scrollText.substring(offset, offset + maxDisplayLen);
+      }
+      ctx.fillText(displayName, 45, y);
       
       y += rowHeight;
     }
@@ -975,6 +1001,12 @@ function sleep(ms: number): Promise<void> {
 
 // ============ NAVIGATION ============
 async function navigateToScreen(screen: Screen): Promise<void> {
+  // Stop scroll timer when leaving settings-event-types
+  if (eventTypesScrollTimer) {
+    clearInterval(eventTypesScrollTimer);
+    eventTypesScrollTimer = null;
+  }
+  
   currentPage = 0;
   switch (screen) {
     case 'main':

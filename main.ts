@@ -572,7 +572,12 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   const totalPages = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
   
   // 4 containers: 3 tiled images (max 200x100 each) + 1 text for event capture
-  // Tile layout: 3 images covering top portion of screen
+  // Tile layout: 3 images centered on screen (400x200 content area)
+  const contentWidth = 400;
+  const contentHeight = 200;
+  const xOffset = Math.floor((CANVAS_WIDTH - contentWidth) / 2);
+  const yOffset = Math.floor((CANVAS_HEIGHT - contentHeight) / 2);
+  
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
@@ -580,19 +585,19 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
         new ImageContainerProperty({
           containerID: 1,
           containerName: 'tile-0',
-          xPosition: 0, yPosition: 0,
+          xPosition: xOffset, yPosition: yOffset,
           width: 200, height: 100,
         }),
         new ImageContainerProperty({
           containerID: 2,
           containerName: 'tile-1',
-          xPosition: 200, yPosition: 0,
+          xPosition: xOffset + 200, yPosition: yOffset,
           width: 200, height: 100,
         }),
         new ImageContainerProperty({
           containerID: 3,
           containerName: 'tile-2',
-          xPosition: 0, yPosition: 100,
+          xPosition: xOffset, yPosition: yOffset + 100,
           width: 200, height: 100,
         }),
       ],

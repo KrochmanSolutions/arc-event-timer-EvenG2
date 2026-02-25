@@ -303,9 +303,9 @@ async function displayMainMenu(): Promise<void> {
           containerID: 3,
           containerName: 'menu-list',
           xPosition: leftMargin,
-          yPosition: LIST_Y_OFFSET,
+          yPosition: 0,
           width: menuWidth,
-          height: CANVAS_HEIGHT - LIST_Y_OFFSET,
+          height: CANVAS_HEIGHT,
           paddingLength: 0,
           isEventCapture: 1,
           itemContainer: new ListItemContainerProperty({

@@ -618,18 +618,38 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   
   await renderEventTypesContent(totalPages);
   
-  // Start scroll animation timer for long names
+  // Start scroll animation timer for long names (3 second delay, synced reset)
   if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
   eventTypesScrollOffset = 0;
-  eventTypesScrollTimer = setInterval(async () => {
-    if (currentScreen !== 'settings-event-types') {
-      if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
-      eventTypesScrollTimer = null;
-      return;
-    }
-    eventTypesScrollOffset++;
-    await renderEventTypesContent();
-  }, 500);
+  
+  // Calculate max cycle length for synced scrolling
+  const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
+  const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
+  const maxDisplayLen = 12;
+  const longestOverflow = Math.max(0, ...pageEventTypes.map(name => 
+    name.length > maxDisplayLen ? name.length + 3 : 0
+  ));
+  
+  if (longestOverflow > 0) {
+    // 3 second delay before scrolling starts
+    setTimeout(() => {
+      if (currentScreen !== 'settings-event-types') return;
+      
+      eventTypesScrollTimer = setInterval(async () => {
+        if (currentScreen !== 'settings-event-types') {
+          if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
+          eventTypesScrollTimer = null;
+          return;
+        }
+        eventTypesScrollOffset++;
+        // Reset all together when longest cycle completes
+        if (eventTypesScrollOffset >= longestOverflow) {
+          eventTypesScrollOffset = 0;
+        }
+        await renderEventTypesContent();
+      }, 400);
+    }, 3000);
+  }
 }
 
 // Render content as tiled images (max 200x100 each per G2 constraints)
@@ -689,16 +709,17 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
       ctx.fillStyle = isChecked ? '#00ff00' : '#666666';
       ctx.fillText(isChecked ? '[X]' : '[ ]', 8, y);
       
-      // Event name with scrolling for long names
+      // Event name with scrolling for long names (synced with pause at end)
       ctx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
       let displayName: string;
       if (eventType.length <= maxDisplayLen) {
         displayName = eventType;
       } else {
-        // Scrolling text effect - rotate through characters
+        // Scrolling text effect - pause at end until all reset
+        const itemCycleLen = eventType.length + 3;
+        const effectiveOffset = Math.min(eventTypesScrollOffset, itemCycleLen - 1);
         const scrollText = eventType + '   ' + eventType;
-        const offset = eventTypesScrollOffset % (eventType.length + 3);
-        displayName = scrollText.substring(offset, offset + maxDisplayLen);
+        displayName = scrollText.substring(effectiveOffset, effectiveOffset + maxDisplayLen);
       }
       ctx.fillText(displayName, 45, y);
       

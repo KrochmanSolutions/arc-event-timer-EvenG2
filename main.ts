@@ -561,6 +561,7 @@ let eventTypesSelectedIdx = 0; // 0 = Back, 1+ = event types
 const EVENT_TYPES_PER_PAGE = 6;
 let eventTypesScrollOffset = 0;
 let eventTypesScrollTimer: ReturnType<typeof setInterval> | null = null;
+let eventTypesScrollDelay: ReturnType<typeof setTimeout> | null = null;
 
 async function displaySettingsEventTypes(page: number = 0, preserveSelection: boolean = false): Promise<void> {
   if (!bridge) return;
@@ -619,7 +620,15 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   await renderEventTypesContent(totalPages);
   
   // Start scroll animation timer for long names (3 second delay, synced reset)
-  if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
+  // Clear any existing timers first
+  if (eventTypesScrollDelay) {
+    clearTimeout(eventTypesScrollDelay);
+    eventTypesScrollDelay = null;
+  }
+  if (eventTypesScrollTimer) {
+    clearInterval(eventTypesScrollTimer);
+    eventTypesScrollTimer = null;
+  }
   eventTypesScrollOffset = 0;
   
   // Calculate max cycle length for synced scrolling
@@ -632,7 +641,7 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   
   if (longestOverflow > 0) {
     // 3 second delay before scrolling starts
-    setTimeout(() => {
+    eventTypesScrollDelay = setTimeout(() => {
       if (currentScreen !== 'settings-event-types') return;
       
       eventTypesScrollTimer = setInterval(async () => {
@@ -1022,7 +1031,11 @@ function sleep(ms: number): Promise<void> {
 
 // ============ NAVIGATION ============
 async function navigateToScreen(screen: Screen): Promise<void> {
-  // Stop scroll timer when leaving settings-event-types
+  // Stop scroll timers when leaving settings-event-types
+  if (eventTypesScrollDelay) {
+    clearTimeout(eventTypesScrollDelay);
+    eventTypesScrollDelay = null;
+  }
   if (eventTypesScrollTimer) {
     clearInterval(eventTypesScrollTimer);
     eventTypesScrollTimer = null;
@@ -1052,6 +1065,16 @@ async function navigateToScreen(screen: Screen): Promise<void> {
 }
 
 async function refreshAndDisplay(): Promise<void> {
+  // Clear any running scroll timers before refresh
+  if (eventTypesScrollDelay) {
+    clearTimeout(eventTypesScrollDelay);
+    eventTypesScrollDelay = null;
+  }
+  if (eventTypesScrollTimer) {
+    clearInterval(eventTypesScrollTimer);
+    eventTypesScrollTimer = null;
+  }
+  
   try {
     await showSplashAnimation();
     await fetchEvents();

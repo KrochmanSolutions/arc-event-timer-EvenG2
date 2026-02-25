@@ -306,11 +306,11 @@ async function displayMainMenu(): Promise<void> {
           yPosition: LIST_Y_OFFSET,
           width: menuWidth,
           height: CANVAS_HEIGHT - LIST_Y_OFFSET,
-          paddingLength: 0,
+          paddingLength: 10,
           isEventCapture: 1,
           itemContainer: new ListItemContainerProperty({
             itemCount: menuItems.length,
-            itemWidth: menuWidth - 16,
+            itemWidth: menuWidth - 20,
             isItemSelectBorderEn: 1,
             itemName: menuItems,
           }),

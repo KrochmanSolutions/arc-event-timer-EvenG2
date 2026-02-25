@@ -259,13 +259,18 @@ async function displayMainMenu(): Promise<void> {
   // Panel dimensions (compliant with 200x100 max per tile)
   const panelTileWidth = 200;
   const panelTileHeight = 100;
-  const panelX = Math.floor(CANVAS_WIDTH * 0.45);
+  const menuWidth = Math.floor(CANVAS_WIDTH * 0.45);
+  
+  // Center the content (menu + panel)
+  const totalContentWidth = menuWidth + panelTileWidth;
+  const leftMargin = Math.floor((CANVAS_WIDTH - totalContentWidth) / 2);
+  const panelX = leftMargin + menuWidth;
   
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
       imageObject: [
-        // Combined header with logo and hint (200x48)
+        // Combined header with logo (200x48)
         new ImageContainerProperty({
           containerID: 1,
           containerName: 'header',
@@ -297,15 +302,15 @@ async function displayMainMenu(): Promise<void> {
         new ListContainerProperty({
           containerID: 3,
           containerName: 'menu-list',
-          xPosition: 0,
+          xPosition: leftMargin,
           yPosition: LIST_Y_OFFSET,
-          width: Math.floor(CANVAS_WIDTH * 0.45),
+          width: menuWidth,
           height: CANVAS_HEIGHT - LIST_Y_OFFSET,
           paddingLength: 0,
           isEventCapture: 1,
           itemContainer: new ListItemContainerProperty({
             itemCount: menuItems.length,
-            itemWidth: Math.floor(CANVAS_WIDTH * 0.45) - 16,
+            itemWidth: menuWidth - 16,
             isItemSelectBorderEn: 1,
             itemName: menuItems,
           }),

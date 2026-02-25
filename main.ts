@@ -640,8 +640,8 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   ));
   
   if (longestOverflow > 0) {
-    // 3 second delay before scrolling starts
-    eventTypesScrollDelay = setTimeout(() => {
+    // Function to start the scroll cycle
+    const startScrollCycle = () => {
       if (currentScreen !== 'settings-event-types') return;
       
       eventTypesScrollTimer = setInterval(async () => {
@@ -651,13 +651,22 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
           return;
         }
         eventTypesScrollOffset++;
-        // Reset all together when longest cycle completes
+        // When cycle completes: reset, pause, restart
         if (eventTypesScrollOffset >= longestOverflow) {
           eventTypesScrollOffset = 0;
+          await renderEventTypesContent();
+          // Stop interval and wait 3 seconds before restarting
+          if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
+          eventTypesScrollTimer = null;
+          eventTypesScrollDelay = setTimeout(startScrollCycle, 3000);
+          return;
         }
         await renderEventTypesContent();
       }, 400);
-    }, 3000);
+    };
+    
+    // Initial 3 second delay before first scroll
+    eventTypesScrollDelay = setTimeout(startScrollCycle, 3000);
   }
 }
 

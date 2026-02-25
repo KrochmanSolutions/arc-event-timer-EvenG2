@@ -631,15 +631,16 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   }
   eventTypesScrollOffset = 0;
   
-  // Calculate max cycle length for synced scrolling
+  // Calculate max scroll steps needed (longest item determines cycle)
   const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
   const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
   const maxDisplayLen = 12;
-  const longestOverflow = Math.max(0, ...pageEventTypes.map(name => 
-    name.length > maxDisplayLen ? name.length + 3 : 0
+  // Each item scrolls (length - maxDisplayLen) steps to show its end
+  const maxScrollSteps = Math.max(0, ...pageEventTypes.map(name => 
+    name.length > maxDisplayLen ? name.length - maxDisplayLen : 0
   ));
   
-  if (longestOverflow > 0) {
+  if (maxScrollSteps > 0) {
     // Function to start the scroll cycle
     const startScrollCycle = () => {
       if (currentScreen !== 'settings-event-types') return;
@@ -651,17 +652,20 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
           return;
         }
         eventTypesScrollOffset++;
-        // When cycle completes: reset, pause, restart
-        if (eventTypesScrollOffset >= longestOverflow) {
-          eventTypesScrollOffset = 0;
-          await renderEventTypesContent();
-          // Stop interval and wait 3 seconds before restarting
+        await renderEventTypesContent();
+        // When longest item finishes: stop, wait 3s, reset
+        if (eventTypesScrollOffset >= maxScrollSteps) {
           if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
           eventTypesScrollTimer = null;
-          eventTypesScrollDelay = setTimeout(startScrollCycle, 3000);
-          return;
+          // Wait 3 seconds at end position, then reset and restart
+          eventTypesScrollDelay = setTimeout(async () => {
+            if (currentScreen !== 'settings-event-types') return;
+            eventTypesScrollOffset = 0;
+            await renderEventTypesContent();
+            // Wait another 3 seconds before scrolling again
+            eventTypesScrollDelay = setTimeout(startScrollCycle, 3000);
+          }, 3000);
         }
-        await renderEventTypesContent();
       }, 400);
     };
     
@@ -727,17 +731,16 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
       ctx.fillStyle = isChecked ? '#00ff00' : '#666666';
       ctx.fillText(isChecked ? '[X]' : '[ ]', 8, y);
       
-      // Event name with scrolling for long names (synced with pause at end)
+      // Event name with scrolling for long names (scroll left, hold at end)
       ctx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
       let displayName: string;
       if (eventType.length <= maxDisplayLen) {
         displayName = eventType;
       } else {
-        // Scrolling text effect - pause at end until all reset
-        const itemCycleLen = eventType.length + 3;
-        const effectiveOffset = Math.min(eventTypesScrollOffset, itemCycleLen - 1);
-        const scrollText = eventType + '   ' + eventType;
-        displayName = scrollText.substring(effectiveOffset, effectiveOffset + maxDisplayLen);
+        // Scroll left to reveal end, hold at final position
+        const maxOffset = eventType.length - maxDisplayLen;
+        const effectiveOffset = Math.min(eventTypesScrollOffset, maxOffset);
+        displayName = eventType.substring(effectiveOffset, effectiveOffset + maxDisplayLen);
       }
       ctx.fillText(displayName, 45, y);
       

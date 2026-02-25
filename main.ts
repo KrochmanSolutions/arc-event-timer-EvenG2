@@ -256,31 +256,41 @@ async function displayMainMenu(): Promise<void> {
   
   currentListItems = menuItems;
   
-  const rightPanelWidth = Math.floor(CANVAS_WIDTH * 0.55);
-  const rightPanelHeight = CANVAS_HEIGHT - LIST_Y_OFFSET;
+  // Panel dimensions (compliant with 200x100 max per tile)
+  const panelTileWidth = 200;
+  const panelTileHeight = 100;
+  const panelX = Math.floor(CANVAS_WIDTH * 0.45);
   
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
       imageObject: [
+        // Combined header with logo and hint (200x48)
         new ImageContainerProperty({
           containerID: 1,
-          containerName: 'hint-right',
-          xPosition: CANVAS_WIDTH - 130, yPosition: 4, width: 126, height: 20,
+          containerName: 'header',
+          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
+          yPosition: 4,
+          width: LOGO_WIDTH,
+          height: 48,
         }),
+        // Panel tile 1 (top)
         new ImageContainerProperty({
           containerID: 2,
-          containerName: 'header-logo',
-          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
-          yPosition: 4, width: LOGO_WIDTH, height: LOGO_HEIGHT,
+          containerName: 'panel-tile-0',
+          xPosition: panelX,
+          yPosition: LIST_Y_OFFSET,
+          width: panelTileWidth,
+          height: panelTileHeight,
         }),
+        // Panel tile 2 (bottom)
         new ImageContainerProperty({
           containerID: 4,
-          containerName: 'current-panel',
-          xPosition: Math.floor(CANVAS_WIDTH * 0.45),
-          yPosition: LIST_Y_OFFSET,
-          width: rightPanelWidth,
-          height: rightPanelHeight,
+          containerName: 'panel-tile-1',
+          xPosition: panelX,
+          yPosition: LIST_Y_OFFSET + panelTileHeight,
+          width: panelTileWidth,
+          height: panelTileHeight,
         }),
       ],
       listObject: [
@@ -288,9 +298,9 @@ async function displayMainMenu(): Promise<void> {
           containerID: 3,
           containerName: 'menu-list',
           xPosition: 0,
-          yPosition: 0,
+          yPosition: LIST_Y_OFFSET,
           width: Math.floor(CANVAS_WIDTH * 0.45),
-          height: CANVAS_HEIGHT,
+          height: CANVAS_HEIGHT - LIST_Y_OFFSET,
           paddingLength: 0,
           isEventCapture: 1,
           itemContainer: new ListItemContainerProperty({
@@ -304,80 +314,130 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  await sendSmallText(1, 'hint-right', '2x Tap = Refresh', 126, 'right');
-  await sendHeaderImage();
-  await sendCurrentEventsPanel(activeEvents, rightPanelWidth, rightPanelHeight);
+  await sendHeaderWithHint();
+  await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
 }
 
-async function sendCurrentEventsPanel(events: GameEvent[], width: number, height: number): Promise<void> {
+// Send combined header with logo and hint text (for main menu)
+async function sendHeaderWithHint(): Promise<void> {
   if (!bridge) return;
   
   try {
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = LOGO_WIDTH;
+    canvas.height = 48;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Black background
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, LOGO_WIDTH, 48);
+    
+    // Load and draw logo
+    const logoImg = await loadImage('/header.png');
+    const logoH = Math.min(logoImg.height, 40);
+    const logoW = (logoImg.width / logoImg.height) * logoH;
+    const logoX = (LOGO_WIDTH - logoW) / 2;
+    ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
+    
+    // Draw hint text below/beside logo
+    ctx.fillStyle = '#888888';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('2x Tap=Refresh', LOGO_WIDTH - 4, 44);
+    
+    const base64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+    await bridge.updateImageRawData(
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageFormat: 'png', imageData: base64 })
+    );
+  } catch (err) {
+    console.error('[IMAGE] Header with hint error:', err);
+  }
+}
+
+// Send current events panel as tiled images (max 200x100 each)
+async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, tileH: number): Promise<void> {
+  if (!bridge) return;
+  
+  try {
+    // Draw to a canvas covering both tiles
+    const fullHeight = tileH * 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = tileW;
+    canvas.height = fullHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, tileW, fullHeight);
     
     // Header
     ctx.fillStyle = '#00ff00';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('CURRENT', 8, 18);
+    ctx.fillText('CURRENT', 4, 14);
     
-    // Divider line
+    // Divider
     ctx.strokeStyle = '#444444';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(8, 26);
-    ctx.lineTo(width - 8, 26);
+    ctx.moveTo(4, 20);
+    ctx.lineTo(tileW - 4, 20);
     ctx.stroke();
     
     if (events.length === 0) {
       ctx.fillStyle = '#888888';
-      ctx.font = '13px monospace';
-      ctx.fillText('No active events', 8, 50);
+      ctx.font = '11px monospace';
+      ctx.fillText('No active events', 4, 38);
     } else {
-      const lineHeight = 36;
-      let y = 44;
-      const timerX = width - 12;
+      const lineHeight = 32;
+      let y = 34;
+      const timerX = tileW - 8;
       
       for (const event of events) {
         const now = Date.now();
         const timeLeft = event.endTime ? formatDuration(event.endTime - now) : 'Now';
         
-        // Map name in cyan
         ctx.fillStyle = '#00cccc';
-        ctx.font = 'bold 12px monospace';
+        ctx.font = 'bold 11px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(event.map, 8, y);
+        ctx.fillText(event.map?.substring(0, 18) || '', 4, y);
         
-        // Event name in white
         ctx.fillStyle = '#ffffff';
-        ctx.font = '12px monospace';
-        ctx.fillText(event.name, 8, y + 14);
+        ctx.font = '10px monospace';
+        ctx.fillText(event.name?.substring(0, 20) || '', 4, y + 12);
         
-        // Time remaining - right aligned in yellow/orange
         ctx.fillStyle = '#ffaa00';
-        ctx.font = 'bold 12px monospace';
+        ctx.font = 'bold 10px monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(timeLeft, timerX, y + 7);
+        ctx.fillText(timeLeft, timerX, y + 6);
         
         y += lineHeight;
-        if (y > height - 20) break;
+        if (y > fullHeight - 16) break;
       }
     }
     
-    const base64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 4, containerName: 'current-panel', imageData: base64 })
-    );
+    // Extract and send each tile
+    const tiles = [
+      { id: 2, name: 'panel-tile-0', y: 0 },
+      { id: 4, name: 'panel-tile-1', y: tileH },
+    ];
+    
+    for (const tile of tiles) {
+      const tileCanvas = document.createElement('canvas');
+      tileCanvas.width = tileW;
+      tileCanvas.height = tileH;
+      const tileCtx = tileCanvas.getContext('2d');
+      if (!tileCtx) continue;
+      
+      tileCtx.drawImage(canvas, 0, tile.y, tileW, tileH, 0, 0, tileW, tileH);
+      
+      const base64 = tileCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+      await bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: tile.id, containerName: tile.name, imageFormat: 'png', imageData: base64 })
+      );
+    }
   } catch (err) {
-    console.error('[IMAGE] Current panel error:', err);
+    console.error('[IMAGE] Tiled panel error:', err);
   }
 }
 
@@ -504,21 +564,34 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   
   const totalPages = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
   
-  // 2 containers: content image, text for event capture
+  // 4 containers: 3 tiled images (max 200x100 each) + 1 text for event capture
+  // Tile layout: 3 images covering top portion of screen
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
-      containerTotalNum: 2,
+      containerTotalNum: 4,
       imageObject: [
         new ImageContainerProperty({
           containerID: 1,
-          containerName: 'content',
+          containerName: 'tile-0',
           xPosition: 0, yPosition: 0,
-          width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
+          width: 200, height: 100,
+        }),
+        new ImageContainerProperty({
+          containerID: 2,
+          containerName: 'tile-1',
+          xPosition: 200, yPosition: 0,
+          width: 200, height: 100,
+        }),
+        new ImageContainerProperty({
+          containerID: 3,
+          containerName: 'tile-2',
+          xPosition: 0, yPosition: 100,
+          width: 200, height: 100,
         }),
       ],
       textObject: [
         new TextContainerProperty({
-          containerID: 2,
+          containerID: 4,
           containerName: 'event-capture',
           xPosition: 0, yPosition: 0,
           width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
@@ -531,7 +604,8 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   await renderEventTypesContent(totalPages);
 }
 
-// Render full content (page info + back button + checkboxes + event names) as single image
+// Render content as tiled images (max 200x100 each per G2 constraints)
+// Tiles: tile-0 (0,0,200,100), tile-1 (200,0,200,100), tile-2 (0,100,200,100)
 async function renderEventTypesContent(totalPages?: number): Promise<void> {
   if (!bridge) return;
   
@@ -540,21 +614,22 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
     const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
     const pages = totalPages ?? Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
     
-    const rowHeight = 34;
-    const imgWidth = CANVAS_WIDTH;
-    const imgHeight = CANVAS_HEIGHT;
+    const rowHeight = 30;
+    // Draw to a 400x200 canvas (covers our 3 tiles)
+    const fullWidth = 400;
+    const fullHeight = 200;
     
     const canvas = document.createElement('canvas');
-    canvas.width = imgWidth;
-    canvas.height = imgHeight;
+    canvas.width = fullWidth;
+    canvas.height = fullHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, imgWidth, imgHeight);
+    ctx.fillRect(0, 0, fullWidth, fullHeight);
     
     // Draw page info at top
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 12px monospace';
     ctx.textBaseline = 'top';
     ctx.fillStyle = '#888888';
     ctx.fillText(`Page ${eventTypesPage + 1}/${pages}  Scroll=Page  Tap=Toggle`, 8, 6);
@@ -562,11 +637,11 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
     // Draw "2x tap to save" hint on right side
     ctx.fillStyle = '#888888';
     ctx.textAlign = 'right';
-    ctx.fillText('2x Tap to Save', imgWidth - 8, 6);
+    ctx.fillText('2x Tap to Save', fullWidth - 8, 6);
     ctx.textAlign = 'left';
     
-    ctx.font = 'bold 20px monospace';
-    let y = 64;
+    ctx.font = 'bold 16px monospace';
+    let y = 30;
     
     // Draw event types with checkboxes
     for (let i = 0; i < pageEventTypes.length; i++) {
@@ -578,7 +653,7 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
       if (isSelected) {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
-        ctx.strokeRect(2, y - 2, imgWidth - 4, rowHeight);
+        ctx.strokeRect(2, y - 2, fullWidth - 4, rowHeight);
       }
       
       // Checkbox
@@ -587,22 +662,40 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
       
       // Event name
       ctx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
-      ctx.fillText(eventType, 52, y);
+      ctx.fillText(eventType, 48, y);
       
       y += rowHeight;
     }
     
-    const dataUrl = canvas.toDataURL('image/png');
-    const base64 = dataUrl.split(',')[1];
+    // Extract and send each tile
+    const tiles = [
+      { id: 1, name: 'tile-0', x: 0, y: 0, w: 200, h: 100 },
+      { id: 2, name: 'tile-1', x: 200, y: 0, w: 200, h: 100 },
+      { id: 3, name: 'tile-2', x: 0, y: 100, w: 200, h: 100 },
+    ];
     
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({
-        containerID: 1,
-        containerName: 'content',
-        imageFormat: 'png',
-        imageData: base64,
-      })
-    );
+    for (const tile of tiles) {
+      const tileCanvas = document.createElement('canvas');
+      tileCanvas.width = tile.w;
+      tileCanvas.height = tile.h;
+      const tileCtx = tileCanvas.getContext('2d');
+      if (!tileCtx) continue;
+      
+      // Copy tile region from main canvas
+      tileCtx.drawImage(canvas, tile.x, tile.y, tile.w, tile.h, 0, 0, tile.w, tile.h);
+      
+      const dataUrl = tileCanvas.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
+      
+      await bridge.updateImageRawData(
+        new ImageRawDataUpdate({
+          containerID: tile.id,
+          containerName: tile.name,
+          imageFormat: 'png',
+          imageData: base64,
+        })
+      );
+    }
   } catch (e) {
     console.error('renderEventTypesContent error:', e);
   }

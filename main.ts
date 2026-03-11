@@ -566,62 +566,18 @@ async function displaySettingsEventTypes(): Promise<void> {
   
   currentScreen = 'settings-event-types';
   
-  // Build list items with checkboxes
-  const itemNames = EVENT_TYPES.map((eventType) => {
-    const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
-    const checkbox = isChecked ? '[X] ' : '[ ] ';
-    return `${checkbox}${eventType}`;
-  });
+  // Build list items with checkboxes - add Back option at top
+  const listItems = [
+    '<<< Back to Settings',
+    ...EVENT_TYPES.map((eventType) => {
+      const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
+      const checkbox = isChecked ? '[X] ' : '[ ] ';
+      return `${checkbox}${eventType}`;
+    }),
+  ];
   
-  // Store for event handling
-  currentListItems = itemNames;
-  
-  // Use same pattern as displaySimpleList (which works on hardware)
-  await bridge.rebuildPageContainer(
-    new RebuildPageContainer({
-      containerTotalNum: 4,
-      imageObject: [
-        new ImageContainerProperty({
-          containerID: 1,
-          containerName: 'hint-left',
-          xPosition: 4, yPosition: 4, width: 100, height: 20,
-        }),
-        new ImageContainerProperty({
-          containerID: 2,
-          containerName: 'header-logo',
-          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
-          yPosition: 4, width: LOGO_WIDTH, height: LOGO_HEIGHT,
-        }),
-        new ImageContainerProperty({
-          containerID: 3,
-          containerName: 'hint-right',
-          xPosition: CANVAS_WIDTH - 130, yPosition: 4, width: 126, height: 20,
-        }),
-      ],
-      listObject: [
-        new ListContainerProperty({
-          containerID: 4,
-          containerName: 'event-types-list',
-          xPosition: 0,
-          yPosition: LIST_Y_OFFSET,
-          width: CANVAS_WIDTH,
-          height: CANVAS_HEIGHT - LIST_Y_OFFSET,
-          paddingLength: 4,
-          isEventCapture: 1,
-          itemContainer: new ListItemContainerProperty({
-            itemCount: itemNames.length,
-            itemWidth: CANVAS_WIDTH - 16,
-            isItemSelectBorderEn: 1,
-            itemName: itemNames,
-          }),
-        }),
-      ],
-    })
-  );
-  
-  await sendSmallText(1, 'hint-left', 'FAVORITES', 100, 'left');
-  await sendSmallText(3, 'hint-right', 'Tap=Toggle 2x=Save', 126, 'right');
-  await sendHeaderImage();
+  currentListItems = listItems;
+  await displaySimpleList(listItems, 'FAVORITES');
 }
 
 
@@ -994,24 +950,27 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
           await navigateToScreen('settings');
         }
       } else if (currentScreen === 'settings-event-types') {
-        // Double tap - save and go back
-        if (isDoubleClick) {
+        // List has: Back (0), then event types (1-12)
+        logStatus(`EventTypes click: idx=${itemIndex} name="${itemName}"`);
+        
+        if (itemIndex === 0 || itemName.includes('<<< Back') || itemName.includes('Settings')) {
+          // Go back to settings
           savePrefs();
           await navigateToScreen('settings');
-          return;
-        }
-        
-        // Single tap - toggle the selected event type
-        if (isClick && itemIndex >= 0 && itemIndex < EVENT_TYPES.length) {
-          const eventType = EVENT_TYPES[itemIndex];
-          const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
-          if (idx >= 0) {
-            userPrefs.favoriteEventTypes.splice(idx, 1);
-          } else {
-            userPrefs.favoriteEventTypes.push(eventType);
+        } else {
+          // Toggle event type (index 1+ maps to EVENT_TYPES[index-1])
+          const eventTypeIdx = itemIndex - 1;
+          if (eventTypeIdx >= 0 && eventTypeIdx < EVENT_TYPES.length) {
+            const eventType = EVENT_TYPES[eventTypeIdx];
+            const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
+            if (idx >= 0) {
+              userPrefs.favoriteEventTypes.splice(idx, 1);
+            } else {
+              userPrefs.favoriteEventTypes.push(eventType);
+            }
+            savePrefs();
+            await displaySettingsEventTypes();
           }
-          savePrefs();
-          await displaySettingsEventTypes();
         }
       }
     }

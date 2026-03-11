@@ -934,26 +934,26 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         await navigateToScreen('main');
         return;
       } else if (currentScreen === 'settings') {
-        if (itemName.includes('<<< Back')) {
+        // Settings has 3 items: Back (0), Auto-Launch (1), Edit Favorites (2)
+        if (itemIndex === 0 || itemName.includes('<<< Back')) {
           await navigateToScreen('main');
-        } else if (itemName.includes('Auto-Launch')) {
+        } else if (itemIndex === 1 || itemName.includes('Auto-Launch')) {
           await navigateToScreen('settings-autolaunch');
-        } else if (itemName.includes('Favorite Event Types')) {
+        } else if (itemIndex === 2 || itemName.includes('Favorite Event Types')) {
           await navigateToScreen('settings-event-types');
         }
       } else if (currentScreen === 'settings-autolaunch') {
-        if (itemName.includes('<<< Back')) {
+        // Auto-launch has 4 items: Back (0), main (1), favorites (2), all-events (3)
+        if (itemIndex === 0 || itemName.includes('<<< Back')) {
           await navigateToScreen('settings');
         } else {
-          // Toggle auto-launch option
+          // Toggle auto-launch option based on index
           const options: Screen[] = ['main', 'favorites', 'all-events'];
-          for (const opt of options) {
-            if (itemName.includes(opt)) {
-              userPrefs.autoLaunchScreen = opt;
-              savePrefs();
-              await displaySettingsAutoLaunch();
-              break;
-            }
+          const optionIndex = itemIndex - 1; // Subtract 1 for Back button
+          if (optionIndex >= 0 && optionIndex < options.length) {
+            userPrefs.autoLaunchScreen = options[optionIndex];
+            savePrefs();
+            await displaySettingsAutoLaunch();
           }
         }
       } else if (currentScreen === 'settings-event-types') {

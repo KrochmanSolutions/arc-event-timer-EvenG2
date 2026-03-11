@@ -558,48 +558,40 @@ async function displaySettingsAutoLaunch(): Promise<void> {
   await displaySimpleList(listItems, 'AUTO-LAUNCH');
 }
 
-// Event types pagination
-let eventTypesPage = 0;
-const EVENT_TYPES_PER_PAGE = 5;
+// Event types selection
+let eventTypesSelectedIdx = 0;
 
-async function displaySettingsEventTypes(page: number = 0): Promise<void> {
+async function displaySettingsEventTypes(): Promise<void> {
   if (!bridge) return;
   
   currentScreen = 'settings-event-types';
-  eventTypesPage = page;
   
-  const totalPages = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-  const startIdx = page * EVENT_TYPES_PER_PAGE;
-  const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
+  // Build list items with checkboxes
+  const itemNames = EVENT_TYPES.map((eventType) => {
+    const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
+    const checkbox = isChecked ? '[X] ' : '[ ] ';
+    return `${checkbox}${eventType}`;
+  });
   
-  // Build item names with checkboxes - include page nav as first item
-  const itemNames = [
-    `>>> Page ${page + 1}/${totalPages} (tap for next)`,
-    ...pageEventTypes.map((eventType) => {
-      const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
-      const checkbox = isChecked ? '[X] ' : '[ ] ';
-      return `${checkbox}${eventType}`;
-    }),
-  ];
-  
+  // Use list container - all items fit on one screen
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 2,
       textObject: [
         new TextContainerProperty({
           containerID: 1,
-          containerName: 'header-text',
-          content: `Edit Favorites | 2x=Save`,
+          containerName: 'header',
+          content: 'Edit Favorites | Tap=Toggle | 2x=Save',
           xPosition: 0, yPosition: 0,
-          width: CANVAS_WIDTH, height: 36,
+          width: CANVAS_WIDTH, height: 30,
         }),
       ],
       listObject: [
         new ListContainerProperty({
           containerID: 2,
           containerName: 'event-types-list',
-          xPosition: 10, yPosition: 36,
-          width: CANVAS_WIDTH - 20, height: CANVAS_HEIGHT - 40,
+          xPosition: 8, yPosition: 30,
+          width: CANVAS_WIDTH - 16, height: CANVAS_HEIGHT - 35,
           isEventCapture: 1,
           itemContainer: new ListItemContainerProperty({
             itemCount: itemNames.length,
@@ -965,22 +957,6 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
           }
         }
       } else if (currentScreen === 'settings-event-types') {
-        const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
-        const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
-        const totalPages = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-        
-        // Scroll boundary - navigate pages
-        if (isScrollBottom) {
-          const nextPage = (eventTypesPage + 1) % totalPages;
-          await displaySettingsEventTypes(nextPage);
-          return;
-        }
-        if (isScrollTop) {
-          const prevPage = eventTypesPage === 0 ? totalPages - 1 : eventTypesPage - 1;
-          await displaySettingsEventTypes(prevPage);
-          return;
-        }
-        
         // Double tap - save and go back
         if (isDoubleClick) {
           savePrefs();
@@ -988,28 +964,17 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
           return;
         }
         
-        // Single tap handling
-        if (isClick) {
-          // Item 0 is page navigation
-          if (itemIndex === 0) {
-            const nextPage = (eventTypesPage + 1) % totalPages;
-            await displaySettingsEventTypes(nextPage);
-            return;
+        // Single tap - toggle the selected event type
+        if (isClick && itemIndex >= 0 && itemIndex < EVENT_TYPES.length) {
+          const eventType = EVENT_TYPES[itemIndex];
+          const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
+          if (idx >= 0) {
+            userPrefs.favoriteEventTypes.splice(idx, 1);
+          } else {
+            userPrefs.favoriteEventTypes.push(eventType);
           }
-          
-          // Items 1+ are event types (index - 1 to get actual event type index)
-          const eventTypeIdx = itemIndex - 1;
-          if (eventTypeIdx >= 0 && eventTypeIdx < pageEventTypes.length) {
-            const eventType = pageEventTypes[eventTypeIdx];
-            const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
-            if (idx >= 0) {
-              userPrefs.favoriteEventTypes.splice(idx, 1);
-            } else {
-              userPrefs.favoriteEventTypes.push(eventType);
-            }
-            savePrefs();
-            await displaySettingsEventTypes(eventTypesPage);
-          }
+          savePrefs();
+          await displaySettingsEventTypes();
         }
       }
     }
@@ -1028,8 +993,6 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     
     // Handle settings-event-types via sysEvent
     if (currentScreen === 'settings-event-types') {
-      const totalPgs = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-      
       // Double tap - save and go back
       if (sysType === 3) {
         savePrefs();
@@ -1037,17 +1000,10 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         return;
       }
       
-      // Scroll down - next page
-      if (sysType === 2) {
-        const nextPage = (eventTypesPage + 1) % totalPgs;
-        await displaySettingsEventTypes(nextPage);
-        return;
-      }
-      
-      // Scroll up - prev page
-      if (sysType === 1) {
-        const prevPage = eventTypesPage === 0 ? totalPgs - 1 : eventTypesPage - 1;
-        await displaySettingsEventTypes(prevPage);
+      // Single tap - go back
+      if (sysType === 0 || sysType === undefined) {
+        savePrefs();
+        await navigateToScreen('settings');
         return;
       }
     }
@@ -1072,7 +1028,7 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
       return;
     }
     
-    // Scroll down (type 2) - next page or move selection down
+    // Scroll down (type 2) - next page
     if (textType === 2) {
       if (currentScreen === 'all-events') {
         const nextPage = currentPage + 1 >= totalPages ? 0 : currentPage + 1;
@@ -1082,12 +1038,6 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
       if (currentScreen === 'favorites') {
         const nextPage = currentPage + 1 >= totalPages ? 0 : currentPage + 1;
         await displayFavorites(nextPage);
-        return;
-      }
-      if (currentScreen === 'settings-event-types') {
-        const totalPgs = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-        const nextPage = (eventTypesPage + 1) % totalPgs;
-        await displaySettingsEventTypes(nextPage);
         return;
       }
     }
@@ -1104,24 +1054,6 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         await displayFavorites(prevPage);
         return;
       }
-      if (currentScreen === 'settings-event-types') {
-        const totalPgs = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-        const prevPage = eventTypesPage === 0 ? totalPgs - 1 : eventTypesPage - 1;
-        await displaySettingsEventTypes(prevPage);
-        return;
-      }
-    }
-    
-    // Double tap (type 3) - go back to settings from event types
-    if (textType === 3) {
-      if (currentScreen === 'settings-event-types') {
-        savePrefs();
-        await navigateToScreen('settings');
-        return;
-      }
-      // Otherwise refresh
-      await refreshAndDisplay();
-      return;
     }
     
     // Click (type 0) - return to menu from event screens

@@ -572,12 +572,15 @@ async function displaySettingsEventTypes(page: number = 0): Promise<void> {
   const startIdx = page * EVENT_TYPES_PER_PAGE;
   const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
   
-  // Build item names with checkboxes
-  const itemNames = pageEventTypes.map((eventType) => {
-    const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
-    const checkbox = isChecked ? '[X] ' : '[ ] ';
-    return `${checkbox}${eventType}`;
-  });
+  // Build item names with checkboxes - include page nav as first item
+  const itemNames = [
+    `>>> Page ${page + 1}/${totalPages} (tap for next)`,
+    ...pageEventTypes.map((eventType) => {
+      const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
+      const checkbox = isChecked ? '[X] ' : '[ ] ';
+      return `${checkbox}${eventType}`;
+    }),
+  ];
   
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
@@ -586,21 +589,21 @@ async function displaySettingsEventTypes(page: number = 0): Promise<void> {
         new TextContainerProperty({
           containerID: 1,
           containerName: 'header-text',
-          content: `Edit Favorites (${page + 1}/${totalPages}) | 2x=Save`,
+          content: `Edit Favorites | 2x=Save`,
           xPosition: 0, yPosition: 0,
-          width: CANVAS_WIDTH, height: 40,
+          width: CANVAS_WIDTH, height: 36,
         }),
       ],
       listObject: [
         new ListContainerProperty({
           containerID: 2,
           containerName: 'event-types-list',
-          xPosition: 20, yPosition: 40,
-          width: CANVAS_WIDTH - 40, height: CANVAS_HEIGHT - 50,
+          xPosition: 10, yPosition: 36,
+          width: CANVAS_WIDTH - 20, height: CANVAS_HEIGHT - 40,
           isEventCapture: 1,
           itemContainer: new ListItemContainerProperty({
             itemCount: itemNames.length,
-            itemWidth: CANVAS_WIDTH - 60,
+            itemWidth: CANVAS_WIDTH - 40,
             isItemSelectBorderEn: 1,
             itemName: itemNames,
           }),
@@ -966,7 +969,7 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
         const totalPages = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
         
-        // Scroll - navigate pages
+        // Scroll boundary - navigate pages
         if (isScrollBottom) {
           const nextPage = (eventTypesPage + 1) % totalPages;
           await displaySettingsEventTypes(nextPage);
@@ -985,17 +988,28 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
           return;
         }
         
-        // Single tap - toggle the selected event type
-        if (isClick && itemIndex >= 0 && itemIndex < pageEventTypes.length) {
-          const eventType = pageEventTypes[itemIndex];
-          const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
-          if (idx >= 0) {
-            userPrefs.favoriteEventTypes.splice(idx, 1);
-          } else {
-            userPrefs.favoriteEventTypes.push(eventType);
+        // Single tap handling
+        if (isClick) {
+          // Item 0 is page navigation
+          if (itemIndex === 0) {
+            const nextPage = (eventTypesPage + 1) % totalPages;
+            await displaySettingsEventTypes(nextPage);
+            return;
           }
-          savePrefs();
-          await displaySettingsEventTypes(eventTypesPage);
+          
+          // Items 1+ are event types (index - 1 to get actual event type index)
+          const eventTypeIdx = itemIndex - 1;
+          if (eventTypeIdx >= 0 && eventTypeIdx < pageEventTypes.length) {
+            const eventType = pageEventTypes[eventTypeIdx];
+            const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
+            if (idx >= 0) {
+              userPrefs.favoriteEventTypes.splice(idx, 1);
+            } else {
+              userPrefs.favoriteEventTypes.push(eventType);
+            }
+            savePrefs();
+            await displaySettingsEventTypes(eventTypesPage);
+          }
         }
       }
     }

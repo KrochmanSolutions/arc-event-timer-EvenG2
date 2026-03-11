@@ -954,12 +954,23 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         return;
       } else if (currentScreen === 'settings') {
         // Settings has 3 items: Back (0), Auto-Launch (1), Edit Favorites (2)
-        if (itemIndex === 0 || itemName.includes('<<< Back')) {
+        // Try itemName first, then fall back to index
+        logStatus(`Settings click: idx=${itemIndex} name="${itemName}"`);
+        if (itemName.includes('<<< Back') || itemName.includes('Back to Menu')) {
           await navigateToScreen('main');
-        } else if (itemIndex === 1 || itemName.includes('Auto-Launch')) {
+        } else if (itemName.includes('Auto-Launch')) {
           await navigateToScreen('settings-autolaunch');
-        } else if (itemIndex === 2 || itemName.includes('Favorite Event Types')) {
+        } else if (itemName.includes('Favorite') || itemName.includes('Event Types')) {
           await navigateToScreen('settings-event-types');
+        } else {
+          // Fallback to index if name doesn't match
+          if (itemIndex === 0) {
+            await navigateToScreen('main');
+          } else if (itemIndex === 1) {
+            await navigateToScreen('settings-autolaunch');
+          } else if (itemIndex === 2) {
+            await navigateToScreen('settings-event-types');
+          }
         }
       } else if (currentScreen === 'settings-autolaunch') {
         // Auto-launch has 4 items: Back (0), main (1), favorites (2), all-events (3)

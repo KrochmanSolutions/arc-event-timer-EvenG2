@@ -558,232 +558,56 @@ async function displaySettingsAutoLaunch(): Promise<void> {
   await displaySimpleList(listItems, 'AUTO-LAUNCH');
 }
 
-// Event types pagination and selection
+// Event types pagination
 let eventTypesPage = 0;
-let eventTypesSelectedIdx = 0; // 0 = Back, 1+ = event types
-const EVENT_TYPES_PER_PAGE = 6;
-let eventTypesScrollOffset = 0;
-let eventTypesScrollTimer: ReturnType<typeof setInterval> | null = null;
-let eventTypesScrollDelay: ReturnType<typeof setTimeout> | null = null;
+const EVENT_TYPES_PER_PAGE = 5;
 
-async function displaySettingsEventTypes(page: number = 0, preserveSelection: boolean = false): Promise<void> {
+async function displaySettingsEventTypes(page: number = 0): Promise<void> {
   if (!bridge) return;
   
   currentScreen = 'settings-event-types';
   eventTypesPage = page;
-  if (!preserveSelection) {
-    eventTypesSelectedIdx = 0;
-  }
   
   const totalPages = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
+  const startIdx = page * EVENT_TYPES_PER_PAGE;
+  const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
   
-  // 4 containers: 3 tiled images (max 200x100 each) + 1 text for event capture
-  // Tile layout: 3 images centered on screen (400x200 content area)
-  const contentWidth = 400;
-  const contentHeight = 200;
-  const xOffset = Math.floor((CANVAS_WIDTH - contentWidth) / 2);
-  const yOffset = Math.floor((CANVAS_HEIGHT - contentHeight) / 2);
+  // Build list items with checkboxes
+  const listItems: ListItemContainerProperty[] = pageEventTypes.map((eventType, idx) => {
+    const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
+    const checkbox = isChecked ? '[X] ' : '[ ] ';
+    return new ListItemContainerProperty({
+      itemID: idx,
+      content: `${checkbox}${eventType}`,
+    });
+  });
   
-  // Text container FIRST (containerID 1) so it's behind images for event capture
-  // Images on top (containerIDs 2, 3, 4) - higher IDs draw on top
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
-      containerTotalNum: 4,
+      containerTotalNum: 2,
       textObject: [
         new TextContainerProperty({
           containerID: 1,
-          containerName: 'event-capture',
-          content: ' ',
+          containerName: 'header-text',
+          content: `Edit Favorites (${page + 1}/${totalPages}) | 2x=Save`,
           xPosition: 0, yPosition: 0,
-          width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
-          isEventCapture: 1,
+          width: CANVAS_WIDTH, height: 40,
         }),
       ],
-      imageObject: [
-        new ImageContainerProperty({
+      listObject: [
+        new ListContainerProperty({
           containerID: 2,
-          containerName: 'tile-0',
-          xPosition: xOffset, yPosition: yOffset,
-          width: 200, height: 100,
-        }),
-        new ImageContainerProperty({
-          containerID: 3,
-          containerName: 'tile-1',
-          xPosition: xOffset + 200, yPosition: yOffset,
-          width: 200, height: 100,
-        }),
-        new ImageContainerProperty({
-          containerID: 4,
-          containerName: 'tile-2',
-          xPosition: xOffset, yPosition: yOffset + 100,
-          width: 200, height: 100,
+          containerName: 'event-types-list',
+          xPosition: 20, yPosition: 40,
+          width: CANVAS_WIDTH - 40, height: CANVAS_HEIGHT - 50,
+          listItems,
+          isEventCapture: 1,
         }),
       ],
     })
   );
-  
-  // Clear any existing timers and reset scroll state BEFORE rendering
-  if (eventTypesScrollDelay) {
-    clearTimeout(eventTypesScrollDelay);
-    eventTypesScrollDelay = null;
-  }
-  if (eventTypesScrollTimer) {
-    clearInterval(eventTypesScrollTimer);
-    eventTypesScrollTimer = null;
-  }
-  eventTypesScrollOffset = 0;
-  
-  await renderEventTypesContent(totalPages);
-  
-  // Calculate max scroll steps needed (longest item determines cycle)
-  const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
-  const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
-  const maxDisplayLen = 12;
-  // Each item scrolls (length - maxDisplayLen) steps to show its end
-  const maxScrollSteps = Math.max(0, ...pageEventTypes.map(name => 
-    name.length > maxDisplayLen ? name.length - maxDisplayLen : 0
-  ));
-  
-  if (maxScrollSteps > 0) {
-    // Function to start the scroll cycle
-    const startScrollCycle = () => {
-      if (currentScreen !== 'settings-event-types') return;
-      
-      eventTypesScrollTimer = setInterval(async () => {
-        if (currentScreen !== 'settings-event-types') {
-          if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
-          eventTypesScrollTimer = null;
-          return;
-        }
-        eventTypesScrollOffset++;
-        await renderEventTypesContent();
-        // When longest item finishes: stop, wait 3s, reset
-        if (eventTypesScrollOffset >= maxScrollSteps) {
-          if (eventTypesScrollTimer) clearInterval(eventTypesScrollTimer);
-          eventTypesScrollTimer = null;
-          // Wait 3 seconds at end position, then reset and restart
-          eventTypesScrollDelay = setTimeout(async () => {
-            if (currentScreen !== 'settings-event-types') return;
-            eventTypesScrollOffset = 0;
-            await renderEventTypesContent();
-            // Wait another 3 seconds before scrolling again
-            eventTypesScrollDelay = setTimeout(startScrollCycle, 3000);
-          }, 3000);
-        }
-      }, 400);
-    };
-    
-    // Initial 3 second delay before first scroll
-    eventTypesScrollDelay = setTimeout(startScrollCycle, 3000);
-  }
 }
 
-// Render content as tiled images (max 200x100 each per G2 constraints)
-// Tiles: tile-0 (0,0,200,100), tile-1 (200,0,200,100), tile-2 (0,100,200,100)
-async function renderEventTypesContent(totalPages?: number): Promise<void> {
-  if (!bridge) return;
-  
-  try {
-    const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
-    const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
-    const pages = totalPages ?? Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-    
-    const rowHeight = 30;
-    // Draw to a 400x200 canvas (covers our 3 tiles)
-    const fullWidth = 400;
-    const fullHeight = 200;
-    
-    const canvas = document.createElement('canvas');
-    canvas.width = fullWidth;
-    canvas.height = fullHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, fullWidth, fullHeight);
-    
-    // Draw page info at top
-    ctx.font = 'bold 12px monospace';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = '#888888';
-    ctx.fillText(`Page ${eventTypesPage + 1}/${pages}  Scroll=Page  Tap=Toggle`, 8, 6);
-    
-    // Draw "2x tap to save" hint on right side
-    ctx.fillStyle = '#888888';
-    ctx.textAlign = 'right';
-    ctx.fillText('2x Tap to Save', fullWidth - 8, 6);
-    ctx.textAlign = 'left';
-    
-    ctx.font = '14px monospace';
-    let y = 30;
-    const maxDisplayLen = 12;
-    
-    // Draw event types with checkboxes
-    for (let i = 0; i < pageEventTypes.length; i++) {
-      const eventType = pageEventTypes[i];
-      const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
-      const isSelected = eventTypesSelectedIdx === i;
-      
-      // Outline if selected (constrain to left 196px to fit within tile coverage)
-      if (isSelected) {
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(2, y - 2, 196, rowHeight);
-      }
-      
-      // Checkbox
-      ctx.fillStyle = isChecked ? '#00ff00' : '#666666';
-      ctx.fillText(isChecked ? '[X]' : '[ ]', 8, y);
-      
-      // Event name with scrolling for long names (scroll left, hold at end)
-      ctx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
-      let displayName: string;
-      if (eventType.length <= maxDisplayLen) {
-        displayName = eventType;
-      } else {
-        // Scroll left to reveal end, hold at final position
-        const maxOffset = eventType.length - maxDisplayLen;
-        const effectiveOffset = Math.min(eventTypesScrollOffset, maxOffset);
-        displayName = eventType.substring(effectiveOffset, effectiveOffset + maxDisplayLen);
-      }
-      ctx.fillText(displayName, 45, y);
-      
-      y += rowHeight;
-    }
-    
-    // Extract and send each tile
-    const tiles = [
-      { id: 2, name: 'tile-0', x: 0, y: 0, w: 200, h: 100 },
-      { id: 3, name: 'tile-1', x: 200, y: 0, w: 200, h: 100 },
-      { id: 4, name: 'tile-2', x: 0, y: 100, w: 200, h: 100 },
-    ];
-    
-    for (const tile of tiles) {
-      const tileCanvas = document.createElement('canvas');
-      tileCanvas.width = tile.w;
-      tileCanvas.height = tile.h;
-      const tileCtx = tileCanvas.getContext('2d');
-      if (!tileCtx) continue;
-      
-      // Copy tile region from main canvas
-      tileCtx.drawImage(canvas, tile.x, tile.y, tile.w, tile.h, 0, 0, tile.w, tile.h);
-      
-      // Convert to number[] format (recommended for real hardware)
-      const blob = await new Promise<Blob>((resolve) => tileCanvas.toBlob(resolve!, 'image/png'));
-      const arrayBuffer = await blob.arrayBuffer();
-      const imageData = Array.from(new Uint8Array(arrayBuffer));
-      await bridge.updateImageRawData(
-        new ImageRawDataUpdate({
-          containerID: tile.id,
-          containerName: tile.name,
-          imageData,
-        })
-      );
-    }
-  } catch (e) {
-    console.error('renderEventTypesContent error:', e);
-  }
-}
 
 // Helper to display a simple list screen (for menus with selectable items)
 async function displaySimpleList(items: string[], title: string, disableSelection: boolean = false): Promise<void> {
@@ -899,8 +723,9 @@ async function showSplashAnimation(): Promise<void> {
   
   const SPLASH_WIDTH = 200;
   const SPLASH_HEIGHT = 100;
-  const FRAME_COUNT = 10;
+  const FRAME_COUNT = 8;
   
+  // Create container
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 1,
@@ -917,6 +742,7 @@ async function showSplashAnimation(): Promise<void> {
     })
   );
   
+  // Load logo
   let logoImage: HTMLImageElement;
   try {
     logoImage = await loadImage('/header.png');
@@ -924,8 +750,6 @@ async function showSplashAnimation(): Promise<void> {
     return;
   }
   
-  // PRE-RENDER all frames first (slow part happens here)
-  const frames: number[][] = [];
   const canvas = document.createElement('canvas');
   canvas.width = SPLASH_WIDTH;
   canvas.height = SPLASH_HEIGHT;
@@ -933,7 +757,26 @@ async function showSplashAnimation(): Promise<void> {
   const logoX = Math.floor((SPLASH_WIDTH - logoImage.width) / 2);
   const logoY = Math.floor((SPLASH_HEIGHT - logoImage.height) / 2);
   
-  for (let frame = 1; frame <= FRAME_COUNT; frame++) {
+  // IMMEDIATELY render first frame (cursor at left edge)
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
+  ctx.drawImage(logoImage, logoX, logoY);
+  ctx.fillRect(2, 0, SPLASH_WIDTH - 2, SPLASH_HEIGHT); // Cover most of logo
+  ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+  ctx.fillRect(2, 0, 2, SPLASH_HEIGHT); // Green cursor
+  
+  let blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+  let arrayBuffer = await blob.arrayBuffer();
+  const firstFrame = Array.from(new Uint8Array(arrayBuffer));
+  
+  // Show first frame immediately
+  await bridge.updateImageRawData(
+    new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: firstFrame })
+  );
+  
+  // Now pre-render remaining frames in background
+  const frames: number[][] = [];
+  for (let frame = 2; frame <= FRAME_COUNT; frame++) {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
     
@@ -950,49 +793,32 @@ async function showSplashAnimation(): Promise<void> {
       ctx.fillRect(revealWidth, 0, 2, SPLASH_HEIGHT);
     }
     
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
+    blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    arrayBuffer = await blob.arrayBuffer();
     frames.push(Array.from(new Uint8Array(arrayBuffer)));
   }
   
-  // Pre-render blink frames
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-  ctx.drawImage(logoImage, logoX, logoY);
-  ctx.fillStyle = '#00ff00';
-  ctx.fillRect(SPLASH_WIDTH - 4, 0, 3, SPLASH_HEIGHT);
-  let blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-  let arrayBuffer = await blob.arrayBuffer();
-  const blinkOn = Array.from(new Uint8Array(arrayBuffer));
-  
+  // Pre-render final logo frame (no cursor)
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
   ctx.drawImage(logoImage, logoX, logoY);
   blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
   arrayBuffer = await blob.arrayBuffer();
-  const blinkOff = Array.from(new Uint8Array(arrayBuffer));
+  const finalFrame = Array.from(new Uint8Array(arrayBuffer));
   
-  // NOW PLAY the animation fast (all data is pre-rendered)
+  // Play remaining animation frames
   for (const frameData of frames) {
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: frameData })
     );
-    await sleep(50);
+    await sleep(40);
   }
   
-  // Play blink animation
-  for (let i = 0; i < 3; i++) {
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: blinkOn })
-    );
-    await sleep(100);
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: blinkOff })
-    );
-    await sleep(100);
-  }
-  
-  await sleep(100);
+  // Show final logo briefly
+  await bridge.updateImageRawData(
+    new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: finalFrame })
+  );
+  await sleep(300);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -1010,15 +836,6 @@ function sleep(ms: number): Promise<void> {
 
 // ============ NAVIGATION ============
 async function navigateToScreen(screen: Screen): Promise<void> {
-  // Stop scroll timers when leaving settings-event-types
-  if (eventTypesScrollDelay) {
-    clearTimeout(eventTypesScrollDelay);
-    eventTypesScrollDelay = null;
-  }
-  if (eventTypesScrollTimer) {
-    clearInterval(eventTypesScrollTimer);
-    eventTypesScrollTimer = null;
-  }
   
   currentPage = 0;
   switch (screen) {
@@ -1044,16 +861,6 @@ async function navigateToScreen(screen: Screen): Promise<void> {
 }
 
 async function refreshAndDisplay(): Promise<void> {
-  // Clear any running scroll timers before refresh
-  if (eventTypesScrollDelay) {
-    clearTimeout(eventTypesScrollDelay);
-    eventTypesScrollDelay = null;
-  }
-  if (eventTypesScrollTimer) {
-    clearInterval(eventTypesScrollTimer);
-    eventTypesScrollTimer = null;
-  }
-  
   try {
     await showSplashAnimation();
     await preloadImages();
@@ -1155,47 +962,38 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
       } else if (currentScreen === 'settings-event-types') {
         const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
         const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
-        const maxIdx = pageEventTypes.length - 1;
         const totalPages = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
         
-        // Scroll moves selection
+        // Scroll - navigate pages
         if (isScrollBottom) {
-          eventTypesSelectedIdx++;
-          if (eventTypesSelectedIdx > maxIdx) {
-            const nextPage = (eventTypesPage + 1) % totalPages;
-            eventTypesSelectedIdx = 0;
-            await displaySettingsEventTypes(nextPage, true);
-          } else {
-            await renderEventTypesContent();
-          }
+          const nextPage = (eventTypesPage + 1) % totalPages;
+          await displaySettingsEventTypes(nextPage);
           return;
         }
         if (isScrollTop) {
-          eventTypesSelectedIdx--;
-          if (eventTypesSelectedIdx < 0) {
-            const prevPage = eventTypesPage === 0 ? totalPages - 1 : eventTypesPage - 1;
-            const prevPageTypes = EVENT_TYPES.slice(prevPage * EVENT_TYPES_PER_PAGE, (prevPage + 1) * EVENT_TYPES_PER_PAGE);
-            eventTypesSelectedIdx = prevPageTypes.length - 1;
-            await displaySettingsEventTypes(prevPage, true);
-          } else {
-            await renderEventTypesContent();
-          }
+          const prevPage = eventTypesPage === 0 ? totalPages - 1 : eventTypesPage - 1;
+          await displaySettingsEventTypes(prevPage);
           return;
         }
         
-        // Single tap toggles selected event type
-        if (isClick) {
-          const eventType = pageEventTypes[eventTypesSelectedIdx];
-          if (eventType) {
-            const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
-            if (idx >= 0) {
-              userPrefs.favoriteEventTypes.splice(idx, 1);
-            } else {
-              userPrefs.favoriteEventTypes.push(eventType);
-            }
-            savePrefs();
-            await renderEventTypesContent();
+        // Double tap - save and go back
+        if (isDoubleClick) {
+          savePrefs();
+          await navigateToScreen('settings');
+          return;
+        }
+        
+        // Single tap - toggle the selected event type
+        if (isClick && itemIndex >= 0 && itemIndex < pageEventTypes.length) {
+          const eventType = pageEventTypes[itemIndex];
+          const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
+          if (idx >= 0) {
+            userPrefs.favoriteEventTypes.splice(idx, 1);
+          } else {
+            userPrefs.favoriteEventTypes.push(eventType);
           }
+          savePrefs();
+          await displaySettingsEventTypes(eventTypesPage);
         }
       }
     }
@@ -1214,58 +1012,26 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     
     // Handle settings-event-types via sysEvent
     if (currentScreen === 'settings-event-types') {
-      const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
-      const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
-      const maxIdx = pageEventTypes.length - 1;
       const totalPgs = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
       
-      // Double tap (type 3) - go back to settings
+      // Double tap - save and go back
       if (sysType === 3) {
-        eventTypesSelectedIdx = 0;
+        savePrefs();
         await navigateToScreen('settings');
         return;
       }
       
-      // Scroll down (type 2)
+      // Scroll down - next page
       if (sysType === 2) {
-        eventTypesSelectedIdx++;
-        if (eventTypesSelectedIdx > maxIdx) {
-          const nextPage = (eventTypesPage + 1) % totalPgs;
-          eventTypesSelectedIdx = 0;
-          await displaySettingsEventTypes(nextPage, true);
-        } else {
-          await renderEventTypesContent();
-        }
+        const nextPage = (eventTypesPage + 1) % totalPgs;
+        await displaySettingsEventTypes(nextPage);
         return;
       }
       
-      // Scroll up (type 1)
+      // Scroll up - prev page
       if (sysType === 1) {
-        eventTypesSelectedIdx--;
-        if (eventTypesSelectedIdx < 0) {
-          const prevPage = eventTypesPage === 0 ? totalPgs - 1 : eventTypesPage - 1;
-          const prevPageTypes = EVENT_TYPES.slice(prevPage * EVENT_TYPES_PER_PAGE, (prevPage + 1) * EVENT_TYPES_PER_PAGE);
-          eventTypesSelectedIdx = prevPageTypes.length - 1;
-          await displaySettingsEventTypes(prevPage, true);
-        } else {
-          await renderEventTypesContent();
-        }
-        return;
-      }
-      
-      // Single tap (type 0) - toggle selected event type
-      if (sysType === 0 || sysType === undefined) {
-        const eventType = pageEventTypes[eventTypesSelectedIdx];
-        if (eventType) {
-          const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
-          if (idx >= 0) {
-            userPrefs.favoriteEventTypes.splice(idx, 1);
-          } else {
-            userPrefs.favoriteEventTypes.push(eventType);
-          }
-          savePrefs();
-          await renderEventTypesContent();
-        }
+        const prevPage = eventTypesPage === 0 ? totalPgs - 1 : eventTypesPage - 1;
+        await displaySettingsEventTypes(prevPage);
         return;
       }
     }
@@ -1303,19 +1069,9 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         return;
       }
       if (currentScreen === 'settings-event-types') {
-        const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
-        const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
-        const maxIdx = pageEventTypes.length - 1;
         const totalPgs = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-        
-        eventTypesSelectedIdx++;
-        if (eventTypesSelectedIdx > maxIdx) {
-          const nextPage = (eventTypesPage + 1) % totalPgs;
-          eventTypesSelectedIdx = 0;
-          await displaySettingsEventTypes(nextPage, true);
-        } else {
-          await renderEventTypesContent();
-        }
+        const nextPage = (eventTypesPage + 1) % totalPgs;
+        await displaySettingsEventTypes(nextPage);
         return;
       }
     }
@@ -1334,16 +1090,8 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
       }
       if (currentScreen === 'settings-event-types') {
         const totalPgs = Math.ceil(EVENT_TYPES.length / EVENT_TYPES_PER_PAGE);
-        
-        eventTypesSelectedIdx--;
-        if (eventTypesSelectedIdx < 0) {
-          const prevPage = eventTypesPage === 0 ? totalPgs - 1 : eventTypesPage - 1;
-          const prevPageTypes = EVENT_TYPES.slice(prevPage * EVENT_TYPES_PER_PAGE, (prevPage + 1) * EVENT_TYPES_PER_PAGE);
-          eventTypesSelectedIdx = prevPageTypes.length - 1;
-          await displaySettingsEventTypes(prevPage, true);
-        } else {
-          await renderEventTypesContent();
-        }
+        const prevPage = eventTypesPage === 0 ? totalPgs - 1 : eventTypesPage - 1;
+        await displaySettingsEventTypes(prevPage);
         return;
       }
     }
@@ -1351,7 +1099,7 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     // Double tap (type 3) - go back to settings from event types
     if (textType === 3) {
       if (currentScreen === 'settings-event-types') {
-        eventTypesSelectedIdx = 0;
+        savePrefs();
         await navigateToScreen('settings');
         return;
       }
@@ -1360,27 +1108,10 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
       return;
     }
     
-    // Click (type 0) - return to menu or toggle selection
+    // Click (type 0) - return to menu from event screens
     if (textType === 0 || textType === undefined) {
       if (currentScreen === 'favorites' || currentScreen === 'all-events') {
         await navigateToScreen('main');
-        return;
-      }
-      if (currentScreen === 'settings-event-types') {
-        const startIdx = eventTypesPage * EVENT_TYPES_PER_PAGE;
-        const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
-        
-        const eventType = pageEventTypes[eventTypesSelectedIdx];
-        if (eventType) {
-          const idx = userPrefs.favoriteEventTypes.indexOf(eventType);
-          if (idx >= 0) {
-            userPrefs.favoriteEventTypes.splice(idx, 1);
-          } else {
-            userPrefs.favoriteEventTypes.push(eventType);
-          }
-          savePrefs();
-          await renderEventTypesContent();
-        }
         return;
       }
     }

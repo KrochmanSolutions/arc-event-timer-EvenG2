@@ -141,75 +141,14 @@ function formatEventShort(event: GameEvent): string {
   return `${name.substring(0, 12)} ${timeStr}`;
 }
 
-// Helper: convert canvas to PNG number[] (cached or fresh)
-async function canvasToPng(canvas: HTMLCanvasElement): Promise<number[]> {
-  const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-  const arrayBuffer = await blob.arrayBuffer();
-  return Array.from(new Uint8Array(arrayBuffer));
-}
-
-// Pre-render all static images during loading
+// Pre-load header PNG (only static asset)
 async function preloadImages(): Promise<void> {
-  logStatus('Pre-rendering images...');
-  
-  // 1. Header logo PNG
   const response = await fetch('/header.png');
   const arrayBuffer = await response.arrayBuffer();
   imageCache.set('header-logo', Array.from(new Uint8Array(arrayBuffer)));
-  
-  // 2. Navigation controls
-  const navCanvas = document.createElement('canvas');
-  navCanvas.width = 160;
-  navCanvas.height = 44;
-  const navCtx = navCanvas.getContext('2d')!;
-  navCtx.fillStyle = '#000000';
-  navCtx.fillRect(0, 0, 160, 44);
-  navCtx.fillStyle = '#888888';
-  navCtx.font = '11px monospace';
-  navCtx.textAlign = 'right';
-  navCtx.fillText('2x Tap = Refresh', 156, 12);
-  navCtx.fillText('Scroll = Page', 156, 26);
-  navCtx.fillText('1x Tap = Menu', 156, 40);
-  imageCache.set('nav-controls', await canvasToPng(navCanvas));
-  
-  // 3. Small text hints
-  const hints = [
-    { key: 'hint-error', text: 'ERROR', width: 100, align: 'left' as const },
-    { key: 'hint-refresh', text: '2x Tap = Refresh', width: 126, align: 'right' as const },
-  ];
-  for (const hint of hints) {
-    const c = document.createElement('canvas');
-    c.width = hint.width;
-    c.height = 20;
-    const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, hint.width, 20);
-    ctx.fillStyle = '#888888';
-    ctx.font = '10px monospace';
-    ctx.textAlign = hint.align;
-    ctx.textBaseline = 'middle';
-    ctx.fillText(hint.text, hint.align === 'left' ? 2 : hint.width - 2, 10);
-    imageCache.set(hint.key, await canvasToPng(c));
-  }
-  
-  // 4. Main menu header with logo
-  const logoImg = await loadImage('/header.png');
-  const headerCanvas = document.createElement('canvas');
-  headerCanvas.width = LOGO_WIDTH;
-  headerCanvas.height = 48;
-  const headerCtx = headerCanvas.getContext('2d')!;
-  headerCtx.fillStyle = '#000000';
-  headerCtx.fillRect(0, 0, LOGO_WIDTH, 48);
-  const logoH = Math.min(logoImg.height, 40);
-  const logoW = (logoImg.width / logoImg.height) * logoH;
-  const logoX = (LOGO_WIDTH - logoW) / 2;
-  headerCtx.drawImage(logoImg, logoX, 2, logoW, logoH);
-  imageCache.set('header-main', await canvasToPng(headerCanvas));
-  
-  logStatus(`Pre-rendered ${imageCache.size} images`);
 }
 
-// Image helpers - now use cache when available
+// Image helpers
 async function sendHeaderImage(containerId: number = 2): Promise<void> {
   if (!bridge) return;
   const cached = imageCache.get('header-logo');
@@ -223,29 +162,23 @@ async function sendHeaderImage(containerId: number = 2): Promise<void> {
 async function sendSmallText(id: number, name: string, text: string, width: number, align: 'left' | 'right' = 'left'): Promise<void> {
   if (!bridge) return;
   
-  // Check cache first
-  const cacheKey = `text-${text}-${width}-${align}`;
-  let imageData = imageCache.get(cacheKey);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = 20;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   
-  if (!imageData) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = 20;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, width, 20);
-    ctx.fillStyle = '#888888';
-    ctx.font = '10px monospace';
-    ctx.textAlign = align;
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, align === 'left' ? 2 : width - 2, 10);
-    
-    imageData = await canvasToPng(canvas);
-    imageCache.set(cacheKey, imageData);
-  }
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, width, 20);
+  ctx.fillStyle = '#888888';
+  ctx.font = '10px monospace';
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, align === 'left' ? 2 : width - 2, 10);
   
+  const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+  const arrayBuffer = await blob.arrayBuffer();
+  const imageData = Array.from(new Uint8Array(arrayBuffer));
   await bridge.updateImageRawData(
     new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
   );
@@ -253,12 +186,28 @@ async function sendSmallText(id: number, name: string, text: string, width: numb
 
 async function sendNavControls(id: number, name: string): Promise<void> {
   if (!bridge) return;
-  const cached = imageCache.get('nav-controls');
-  if (cached) {
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: id, containerName: name, imageData: cached })
-    );
-  }
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 44;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, 160, 44);
+  ctx.fillStyle = '#888888';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('2x Tap = Refresh', 156, 12);
+  ctx.fillText('Scroll = Page', 156, 26);
+  ctx.fillText('1x Tap = Menu', 156, 40);
+  
+  const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+  const arrayBuffer = await blob.arrayBuffer();
+  const imageData = Array.from(new Uint8Array(arrayBuffer));
+  await bridge.updateImageRawData(
+    new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
+  );
 }
 
 // Data fetching
@@ -378,11 +327,30 @@ async function displayMainMenu(): Promise<void> {
 async function sendHeaderWithHint(): Promise<void> {
   if (!bridge) return;
   
-  const cached = imageCache.get('header-main');
-  if (cached) {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = LOGO_WIDTH;
+    canvas.height = 48;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, LOGO_WIDTH, 48);
+    
+    const logoImg = await loadImage('/header.png');
+    const logoH = Math.min(logoImg.height, 40);
+    const logoW = (logoImg.width / logoImg.height) * logoH;
+    const logoX = (LOGO_WIDTH - logoW) / 2;
+    ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
+    
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    const arrayBuffer = await blob.arrayBuffer();
+    const imageData = Array.from(new Uint8Array(arrayBuffer));
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData: cached })
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
     );
+  } catch (err) {
+    console.error('[IMAGE] Header error:', err);
   }
 }
 
@@ -1430,16 +1398,17 @@ async function init(): Promise<void> {
   
   bridge.onEvenHubEvent(handleEvent);
   
+  // Minimal startup - splash animation will take over immediately
   await bridge.createStartUpPageContainer(
     new CreateStartUpPageContainer({
       containerTotalNum: 1,
       textObject: [
         new TextContainerProperty({
           containerID: 1,
-          containerName: 'loading',
-          content: 'Loading...',
+          containerName: 'startup',
+          content: ' ',
           xPosition: 0, yPosition: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
-          paddingLength: 16, isEventCapture: 1,
+          isEventCapture: 1,
         }),
       ],
     })

@@ -974,17 +974,24 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         }
       } else if (currentScreen === 'settings-autolaunch') {
         // Auto-launch has 4 items: Back (0), main (1), favorites (2), all-events (3)
-        if (itemIndex === 0 || itemName.includes('<<< Back')) {
+        logStatus(`AutoLaunch click: idx=${itemIndex} name="${itemName}"`);
+        if (itemName.includes('<<< Back') || itemName.includes('Settings')) {
           await navigateToScreen('settings');
-        } else {
-          // Toggle auto-launch option based on index
-          const options: Screen[] = ['main', 'favorites', 'all-events'];
-          const optionIndex = itemIndex - 1; // Subtract 1 for Back button
-          if (optionIndex >= 0 && optionIndex < options.length) {
-            userPrefs.autoLaunchScreen = options[optionIndex];
-            savePrefs();
-            await displaySettingsAutoLaunch();
-          }
+        } else if (itemName.includes('main') || itemIndex === 1) {
+          userPrefs.autoLaunchScreen = 'main';
+          savePrefs();
+          await displaySettingsAutoLaunch();
+        } else if (itemName.includes('favorites') || itemIndex === 2) {
+          userPrefs.autoLaunchScreen = 'favorites';
+          savePrefs();
+          await displaySettingsAutoLaunch();
+        } else if (itemName.includes('all-events') || itemIndex === 3) {
+          userPrefs.autoLaunchScreen = 'all-events';
+          savePrefs();
+          await displaySettingsAutoLaunch();
+        } else if (itemIndex === 0) {
+          // Fallback for back
+          await navigateToScreen('settings');
         }
       } else if (currentScreen === 'settings-event-types') {
         // Double tap - save and go back

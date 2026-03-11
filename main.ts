@@ -174,10 +174,8 @@ async function sendSmallText(id: number, name: string, text: string, width: numb
     ctx.textBaseline = 'middle';
     ctx.fillText(text, align === 'left' ? 2 : width - 2, 10);
     
-    // Convert to number[] format (recommended for real hardware)
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+    // Use base64 (faster than toBlob, also supported by G2)
+    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
     );
@@ -206,10 +204,7 @@ async function sendNavControls(id: number, name: string): Promise<void> {
     ctx.fillText('Scroll = Page', width - 4, 26);
     ctx.fillText('1x Tap = Menu', width - 4, 40);
     
-    // Convert to number[] format (recommended for real hardware)
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
     );
@@ -350,10 +345,7 @@ async function sendHeaderWithHint(): Promise<void> {
     const logoX = (LOGO_WIDTH - logoW) / 2;
     ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
     
-    // Convert to number[] format (recommended for real hardware)
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
     );
@@ -446,10 +438,7 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
       
       tileCtx.drawImage(canvas, 0, tile.y, tileW, tileH, 0, 0, tileW, tileH);
       
-      // Convert to number[] format (recommended for real hardware)
-      const blob = await new Promise<Blob>((resolve) => tileCanvas.toBlob(resolve!, 'image/png'));
-      const arrayBuffer = await blob.arrayBuffer();
-      const imageData = Array.from(new Uint8Array(arrayBuffer));
+      const imageData = tileCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({ containerID: tile.id, containerName: tile.name, imageData })
       );
@@ -774,10 +763,7 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
       // Copy tile region from main canvas
       tileCtx.drawImage(canvas, tile.x, tile.y, tile.w, tile.h, 0, 0, tile.w, tile.h);
       
-      // Convert to number[] format (recommended for real hardware)
-      const blob = await new Promise<Blob>((resolve) => tileCanvas.toBlob(resolve!, 'image/png'));
-      const arrayBuffer = await blob.arrayBuffer();
-      const imageData = Array.from(new Uint8Array(arrayBuffer));
+      const imageData = tileCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({
           containerID: tile.id,
@@ -956,10 +942,7 @@ async function showSplashAnimation(): Promise<void> {
       ctx.fillRect(revealWidth, 0, 2, SPLASH_HEIGHT);
     }
     
-    // Convert to number[] format (recommended for real hardware)
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
     );
@@ -982,26 +965,21 @@ async function showSplashAnimation(): Promise<void> {
       ctx.fillStyle = '#00ff00';
       ctx.fillRect(SPLASH_WIDTH - 4, 0, 3, SPLASH_HEIGHT);
       
-      // Convert to number[] format (recommended for real hardware)
-      let blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-      let arrayBuffer = await blob.arrayBuffer();
-      let imageData = Array.from(new Uint8Array(arrayBuffer));
+      let imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
       );
-      await sleep(80);
+      await sleep(100);
       
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
       ctx.drawImage(logoImage, logoX, logoY);
       
-      blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-      arrayBuffer = await blob.arrayBuffer();
-      imageData = Array.from(new Uint8Array(arrayBuffer));
+      imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
       );
-      await sleep(80);
+      await sleep(100);
     }
   }
   

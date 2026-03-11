@@ -572,14 +572,11 @@ async function displaySettingsEventTypes(page: number = 0): Promise<void> {
   const startIdx = page * EVENT_TYPES_PER_PAGE;
   const pageEventTypes = EVENT_TYPES.slice(startIdx, startIdx + EVENT_TYPES_PER_PAGE);
   
-  // Build list items with checkboxes
-  const listItems: ListItemContainerProperty[] = pageEventTypes.map((eventType, idx) => {
+  // Build item names with checkboxes
+  const itemNames = pageEventTypes.map((eventType) => {
     const isChecked = userPrefs.favoriteEventTypes.includes(eventType);
     const checkbox = isChecked ? '[X] ' : '[ ] ';
-    return new ListItemContainerProperty({
-      itemID: idx,
-      content: `${checkbox}${eventType}`,
-    });
+    return `${checkbox}${eventType}`;
   });
   
   await bridge.rebuildPageContainer(
@@ -600,8 +597,13 @@ async function displaySettingsEventTypes(page: number = 0): Promise<void> {
           containerName: 'event-types-list',
           xPosition: 20, yPosition: 40,
           width: CANVAS_WIDTH - 40, height: CANVAS_HEIGHT - 50,
-          listItems,
           isEventCapture: 1,
+          itemContainer: new ListItemContainerProperty({
+            itemCount: itemNames.length,
+            itemWidth: CANVAS_WIDTH - 60,
+            isItemSelectBorderEn: 1,
+            itemName: itemNames,
+          }),
         }),
       ],
     })

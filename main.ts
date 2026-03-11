@@ -55,6 +55,9 @@ let userPrefs: UserPrefs = {
   favoriteEventTypes: [],
 };
 
+// Pre-rendered image cache for instant navigation
+const imageCache: Map<string, number[]> = new Map();
+
 // Logging
 function logStatus(msg: string): void {
   console.log(msg);
@@ -138,28 +141,93 @@ function formatEventShort(event: GameEvent): string {
   return `${name.substring(0, 12)} ${timeStr}`;
 }
 
-// Image helpers
+// Helper: convert canvas to PNG number[] (cached or fresh)
+async function canvasToPng(canvas: HTMLCanvasElement): Promise<number[]> {
+  const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+  const arrayBuffer = await blob.arrayBuffer();
+  return Array.from(new Uint8Array(arrayBuffer));
+}
+
+// Pre-render all static images during loading
+async function preloadImages(): Promise<void> {
+  logStatus('Pre-rendering images...');
+  
+  // 1. Header logo PNG
+  const response = await fetch('/header.png');
+  const arrayBuffer = await response.arrayBuffer();
+  imageCache.set('header-logo', Array.from(new Uint8Array(arrayBuffer)));
+  
+  // 2. Navigation controls
+  const navCanvas = document.createElement('canvas');
+  navCanvas.width = 160;
+  navCanvas.height = 44;
+  const navCtx = navCanvas.getContext('2d')!;
+  navCtx.fillStyle = '#000000';
+  navCtx.fillRect(0, 0, 160, 44);
+  navCtx.fillStyle = '#888888';
+  navCtx.font = '11px monospace';
+  navCtx.textAlign = 'right';
+  navCtx.fillText('2x Tap = Refresh', 156, 12);
+  navCtx.fillText('Scroll = Page', 156, 26);
+  navCtx.fillText('1x Tap = Menu', 156, 40);
+  imageCache.set('nav-controls', await canvasToPng(navCanvas));
+  
+  // 3. Small text hints
+  const hints = [
+    { key: 'hint-error', text: 'ERROR', width: 100, align: 'left' as const },
+    { key: 'hint-refresh', text: '2x Tap = Refresh', width: 126, align: 'right' as const },
+  ];
+  for (const hint of hints) {
+    const c = document.createElement('canvas');
+    c.width = hint.width;
+    c.height = 20;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, hint.width, 20);
+    ctx.fillStyle = '#888888';
+    ctx.font = '10px monospace';
+    ctx.textAlign = hint.align;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(hint.text, hint.align === 'left' ? 2 : hint.width - 2, 10);
+    imageCache.set(hint.key, await canvasToPng(c));
+  }
+  
+  // 4. Main menu header with logo
+  const logoImg = await loadImage('/header.png');
+  const headerCanvas = document.createElement('canvas');
+  headerCanvas.width = LOGO_WIDTH;
+  headerCanvas.height = 48;
+  const headerCtx = headerCanvas.getContext('2d')!;
+  headerCtx.fillStyle = '#000000';
+  headerCtx.fillRect(0, 0, LOGO_WIDTH, 48);
+  const logoH = Math.min(logoImg.height, 40);
+  const logoW = (logoImg.width / logoImg.height) * logoH;
+  const logoX = (LOGO_WIDTH - logoW) / 2;
+  headerCtx.drawImage(logoImg, logoX, 2, logoW, logoH);
+  imageCache.set('header-main', await canvasToPng(headerCanvas));
+  
+  logStatus(`Pre-rendered ${imageCache.size} images`);
+}
+
+// Image helpers - now use cache when available
 async function sendHeaderImage(containerId: number = 2): Promise<void> {
   if (!bridge) return;
-  try {
-    const response = await fetch('/header.png');
-    const arrayBuffer = await response.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+  const cached = imageCache.get('header-logo');
+  if (cached) {
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({
-        containerID: containerId,
-        containerName: 'header-logo',
-        imageData: imageData,
-      })
+      new ImageRawDataUpdate({ containerID: containerId, containerName: 'header-logo', imageData: cached })
     );
-  } catch (err) {
-    console.error('[IMAGE] Header error:', err);
   }
 }
 
 async function sendSmallText(id: number, name: string, text: string, width: number, align: 'left' | 'right' = 'left'): Promise<void> {
   if (!bridge) return;
-  try {
+  
+  // Check cache first
+  const cacheKey = `text-${text}-${width}-${align}`;
+  let imageData = imageCache.get(cacheKey);
+  
+  if (!imageData) {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = 20;
@@ -174,46 +242,23 @@ async function sendSmallText(id: number, name: string, text: string, width: numb
     ctx.textBaseline = 'middle';
     ctx.fillText(text, align === 'left' ? 2 : width - 2, 10);
     
-    // Convert to number[] format (recommended for real hardware)
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
-    );
-  } catch (err) {}
+    imageData = await canvasToPng(canvas);
+    imageCache.set(cacheKey, imageData);
+  }
+  
+  await bridge.updateImageRawData(
+    new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
+  );
 }
 
 async function sendNavControls(id: number, name: string): Promise<void> {
   if (!bridge) return;
-  try {
-    const width = 160;
-    const height = 44;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, width, height);
-    
-    ctx.fillStyle = '#888888';
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'right';
-    
-    ctx.fillText('2x Tap = Refresh', width - 4, 12);
-    ctx.fillText('Scroll = Page', width - 4, 26);
-    ctx.fillText('1x Tap = Menu', width - 4, 40);
-    
-    // Convert to number[] format (recommended for real hardware)
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+  const cached = imageCache.get('nav-controls');
+  if (cached) {
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
+      new ImageRawDataUpdate({ containerID: id, containerName: name, imageData: cached })
     );
-  } catch (err) {}
+  }
 }
 
 // Data fetching
@@ -333,32 +378,11 @@ async function displayMainMenu(): Promise<void> {
 async function sendHeaderWithHint(): Promise<void> {
   if (!bridge) return;
   
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = LOGO_WIDTH;
-    canvas.height = 48;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, LOGO_WIDTH, 48);
-    
-    // Load and draw logo
-    const logoImg = await loadImage('/header.png');
-    const logoH = Math.min(logoImg.height, 40);
-    const logoW = (logoImg.width / logoImg.height) * logoH;
-    const logoX = (LOGO_WIDTH - logoW) / 2;
-    ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
-    
-    // Convert to number[] format (recommended for real hardware)
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+  const cached = imageCache.get('header-main');
+  if (cached) {
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData: cached })
     );
-  } catch (err) {
-    console.error('[IMAGE] Header with hint error:', err);
   }
 }
 
@@ -1062,6 +1086,7 @@ async function refreshAndDisplay(): Promise<void> {
   
   try {
     await showSplashAnimation();
+    await preloadImages();
     await fetchEvents();
     await navigateToScreen(userPrefs.autoLaunchScreen);
   } catch (err) {

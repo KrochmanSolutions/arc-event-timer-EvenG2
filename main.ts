@@ -573,29 +573,44 @@ async function displaySettingsEventTypes(): Promise<void> {
     return `${checkbox}${eventType}`;
   });
   
-  // Use list container - all items fit on one screen
+  // Store for event handling
+  currentListItems = itemNames;
+  
+  // Use same pattern as displaySimpleList (which works on hardware)
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
-      containerTotalNum: 2,
-      textObject: [
-        new TextContainerProperty({
+      containerTotalNum: 4,
+      imageObject: [
+        new ImageContainerProperty({
           containerID: 1,
-          containerName: 'header',
-          content: 'Edit Favorites | Tap=Toggle | 2x=Save',
-          xPosition: 0, yPosition: 0,
-          width: CANVAS_WIDTH, height: 30,
+          containerName: 'hint-left',
+          xPosition: 4, yPosition: 4, width: 100, height: 20,
+        }),
+        new ImageContainerProperty({
+          containerID: 2,
+          containerName: 'header-logo',
+          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
+          yPosition: 4, width: LOGO_WIDTH, height: LOGO_HEIGHT,
+        }),
+        new ImageContainerProperty({
+          containerID: 3,
+          containerName: 'hint-right',
+          xPosition: CANVAS_WIDTH - 130, yPosition: 4, width: 126, height: 20,
         }),
       ],
       listObject: [
         new ListContainerProperty({
-          containerID: 2,
+          containerID: 4,
           containerName: 'event-types-list',
-          xPosition: 8, yPosition: 30,
-          width: CANVAS_WIDTH - 16, height: CANVAS_HEIGHT - 35,
+          xPosition: 0,
+          yPosition: LIST_Y_OFFSET,
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT - LIST_Y_OFFSET,
+          paddingLength: 4,
           isEventCapture: 1,
           itemContainer: new ListItemContainerProperty({
             itemCount: itemNames.length,
-            itemWidth: CANVAS_WIDTH - 40,
+            itemWidth: CANVAS_WIDTH - 16,
             isItemSelectBorderEn: 1,
             itemName: itemNames,
           }),
@@ -603,6 +618,10 @@ async function displaySettingsEventTypes(): Promise<void> {
       ],
     })
   );
+  
+  await sendSmallText(1, 'hint-left', 'FAVORITES', 100, 'left');
+  await sendSmallText(3, 'hint-right', 'Tap=Toggle 2x=Save', 126, 'right');
+  await sendHeaderImage();
 }
 
 

@@ -174,8 +174,10 @@ async function sendSmallText(id: number, name: string, text: string, width: numb
     ctx.textBaseline = 'middle';
     ctx.fillText(text, align === 'left' ? 2 : width - 2, 10);
     
-    // Use base64 (faster than toBlob, also supported by G2)
-    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+    // Convert to number[] format (recommended for real hardware)
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    const arrayBuffer = await blob.arrayBuffer();
+    const imageData = Array.from(new Uint8Array(arrayBuffer));
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
     );
@@ -204,7 +206,10 @@ async function sendNavControls(id: number, name: string): Promise<void> {
     ctx.fillText('Scroll = Page', width - 4, 26);
     ctx.fillText('1x Tap = Menu', width - 4, 40);
     
-    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+    // Convert to number[] format (recommended for real hardware)
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    const arrayBuffer = await blob.arrayBuffer();
+    const imageData = Array.from(new Uint8Array(arrayBuffer));
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: id, containerName: name, imageData })
     );
@@ -345,7 +350,10 @@ async function sendHeaderWithHint(): Promise<void> {
     const logoX = (LOGO_WIDTH - logoW) / 2;
     ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
     
-    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+    // Convert to number[] format (recommended for real hardware)
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    const arrayBuffer = await blob.arrayBuffer();
+    const imageData = Array.from(new Uint8Array(arrayBuffer));
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
     );
@@ -438,7 +446,10 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
       
       tileCtx.drawImage(canvas, 0, tile.y, tileW, tileH, 0, 0, tileW, tileH);
       
-      const imageData = tileCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+      // Convert to number[] format (recommended for real hardware)
+      const blob = await new Promise<Blob>((resolve) => tileCanvas.toBlob(resolve!, 'image/png'));
+      const arrayBuffer = await blob.arrayBuffer();
+      const imageData = Array.from(new Uint8Array(arrayBuffer));
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({ containerID: tile.id, containerName: tile.name, imageData })
       );
@@ -763,7 +774,10 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
       // Copy tile region from main canvas
       tileCtx.drawImage(canvas, tile.x, tile.y, tile.w, tile.h, 0, 0, tile.w, tile.h);
       
-      const imageData = tileCanvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+      // Convert to number[] format (recommended for real hardware)
+      const blob = await new Promise<Blob>((resolve) => tileCanvas.toBlob(resolve!, 'image/png'));
+      const arrayBuffer = await blob.arrayBuffer();
+      const imageData = Array.from(new Uint8Array(arrayBuffer));
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({
           containerID: tile.id,
@@ -891,8 +905,6 @@ async function showSplashAnimation(): Promise<void> {
   
   const SPLASH_WIDTH = 200;
   const SPLASH_HEIGHT = 100;
-  const FRAME_COUNT = 8;
-  const FRAME_DELAY = 20;
   
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
@@ -910,118 +922,18 @@ async function showSplashAnimation(): Promise<void> {
     })
   );
   
-  let logoImage: HTMLImageElement;
-  try {
-    logoImage = await loadImage('/header.png');
-  } catch (err) {
-    return;
-  }
+  // Just show the logo directly - no complex animation
+  const response = await fetch('/header.png');
+  const arrayBuffer = await response.arrayBuffer();
+  const imageData = Array.from(new Uint8Array(arrayBuffer));
+  await bridge.updateImageRawData(
+    new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
+  );
   
-  for (let frame = 1; frame <= FRAME_COUNT; frame++) {
-    const canvas = document.createElement('canvas');
-    canvas.width = SPLASH_WIDTH;
-    canvas.height = SPLASH_HEIGHT;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) continue;
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-    
-    const logoX = Math.floor((SPLASH_WIDTH - logoImage.width) / 2);
-    const logoY = Math.floor((SPLASH_HEIGHT - logoImage.height) / 2);
-    const t = frame / FRAME_COUNT;
-    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    const revealWidth = Math.floor(SPLASH_WIDTH * ease);
-    
-    ctx.drawImage(logoImage, logoX, logoY);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(revealWidth, 0, SPLASH_WIDTH - revealWidth, SPLASH_HEIGHT);
-    
-    if (frame < FRAME_COUNT) {
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-      ctx.fillRect(revealWidth, 0, 2, SPLASH_HEIGHT);
-    }
-    
-    const imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
-    );
-    await sleep(FRAME_DELAY);
-  }
+  // Brief pause to show the logo
+  await sleep(800);
   
-  // Blink cursor
-  const canvas = document.createElement('canvas');
-  canvas.width = SPLASH_WIDTH;
-  canvas.height = SPLASH_HEIGHT;
-  const ctx = canvas.getContext('2d');
-  const logoX = Math.floor((SPLASH_WIDTH - logoImage.width) / 2);
-  const logoY = Math.floor((SPLASH_HEIGHT - logoImage.height) / 2);
-  
-  if (ctx) {
-    for (let blink = 0; blink < 3; blink++) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-      ctx.drawImage(logoImage, logoX, logoY);
-      ctx.fillStyle = '#00ff00';
-      ctx.fillRect(SPLASH_WIDTH - 4, 0, 3, SPLASH_HEIGHT);
-      
-      let imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
-      await bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
-      );
-      await sleep(100);
-      
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-      ctx.drawImage(logoImage, logoX, logoY);
-      
-      imageData = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
-      await bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
-      );
-      await sleep(100);
-    }
-  }
-  
-  // Animate to header position
-  const startX = Math.floor((CANVAS_WIDTH - SPLASH_WIDTH) / 2);
-  const startY = Math.floor((CANVAS_HEIGHT - SPLASH_HEIGHT) / 2);
-  const endX = Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2);
-  const endY = 4;
-  
-  for (let i = 1; i <= 8; i++) {
-    const t = i / 8;
-    const ease = 1 - Math.pow(1 - t, 3);
-    
-    await bridge.rebuildPageContainer(
-      new RebuildPageContainer({
-        containerTotalNum: 1,
-        imageObject: [
-          new ImageContainerProperty({
-            containerID: 1,
-            containerName: 'splash-logo',
-            xPosition: Math.floor(startX + (endX - startX) * ease),
-            yPosition: Math.floor(startY + (endY - startY) * ease),
-            width: Math.floor(SPLASH_WIDTH + (LOGO_WIDTH - SPLASH_WIDTH) * ease),
-            height: Math.floor(SPLASH_HEIGHT + (LOGO_HEIGHT - SPLASH_HEIGHT) * ease),
-          }),
-        ],
-      })
-    );
-    
-    const response = await fetch('/header.png');
-    const arrayBuffer = await response.arrayBuffer();
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({
-        containerID: 1,
-        containerName: 'splash-logo',
-        imageData: Array.from(new Uint8Array(arrayBuffer)),
-      })
-    );
-    await sleep(30);
-  }
-  
-  await sleep(50);
+  // Skip the position animation - go directly to main UI
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

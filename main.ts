@@ -616,37 +616,39 @@ async function displaySettingsEventTypes(page: number = 0, preserveSelection: bo
   const xOffset = Math.floor((CANVAS_WIDTH - contentWidth) / 2);
   const yOffset = Math.floor((CANVAS_HEIGHT - contentHeight) / 2);
   
+  // Text container FIRST (containerID 1) so it's behind images for event capture
+  // Images on top (containerIDs 2, 3, 4) - higher IDs draw on top
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
-      imageObject: [
-        new ImageContainerProperty({
-          containerID: 1,
-          containerName: 'tile-0',
-          xPosition: xOffset, yPosition: yOffset,
-          width: 200, height: 100,
-        }),
-        new ImageContainerProperty({
-          containerID: 2,
-          containerName: 'tile-1',
-          xPosition: xOffset + 200, yPosition: yOffset,
-          width: 200, height: 100,
-        }),
-        new ImageContainerProperty({
-          containerID: 3,
-          containerName: 'tile-2',
-          xPosition: xOffset, yPosition: yOffset + 100,
-          width: 200, height: 100,
-        }),
-      ],
       textObject: [
         new TextContainerProperty({
-          containerID: 4,
+          containerID: 1,
           containerName: 'event-capture',
           content: ' ',
           xPosition: 0, yPosition: 0,
           width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
           isEventCapture: 1,
+        }),
+      ],
+      imageObject: [
+        new ImageContainerProperty({
+          containerID: 2,
+          containerName: 'tile-0',
+          xPosition: xOffset, yPosition: yOffset,
+          width: 200, height: 100,
+        }),
+        new ImageContainerProperty({
+          containerID: 3,
+          containerName: 'tile-1',
+          xPosition: xOffset + 200, yPosition: yOffset,
+          width: 200, height: 100,
+        }),
+        new ImageContainerProperty({
+          containerID: 4,
+          containerName: 'tile-2',
+          xPosition: xOffset, yPosition: yOffset + 100,
+          width: 200, height: 100,
         }),
       ],
     })
@@ -783,9 +785,9 @@ async function renderEventTypesContent(totalPages?: number): Promise<void> {
     
     // Extract and send each tile
     const tiles = [
-      { id: 1, name: 'tile-0', x: 0, y: 0, w: 200, h: 100 },
-      { id: 2, name: 'tile-1', x: 200, y: 0, w: 200, h: 100 },
-      { id: 3, name: 'tile-2', x: 0, y: 100, w: 200, h: 100 },
+      { id: 2, name: 'tile-0', x: 0, y: 0, w: 200, h: 100 },
+      { id: 3, name: 'tile-1', x: 200, y: 0, w: 200, h: 100 },
+      { id: 4, name: 'tile-2', x: 0, y: 100, w: 200, h: 100 },
     ];
     
     for (const tile of tiles) {

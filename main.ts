@@ -905,8 +905,7 @@ async function showSplashAnimation(): Promise<void> {
   
   const SPLASH_WIDTH = 200;
   const SPLASH_HEIGHT = 100;
-  const FRAME_COUNT = 12;
-  const FRAME_DELAY = 40;
+  const FRAME_COUNT = 10;
   
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
@@ -931,32 +930,19 @@ async function showSplashAnimation(): Promise<void> {
     return;
   }
   
-  // Helper: convert canvas to raw grayscale pixels (much faster than PNG encoding)
-  const canvasToGrayscale = (canvas: HTMLCanvasElement): number[] => {
-    const ctx = canvas.getContext('2d')!;
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const pixels = imgData.data;
-    const grayscale: number[] = [];
-    for (let i = 0; i < pixels.length; i += 4) {
-      // BT.601 luminance: 0.299R + 0.587G + 0.114B
-      const gray = Math.round(0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2]);
-      grayscale.push(gray);
-    }
-    return grayscale;
-  };
-  
-  // Reveal animation
+  // PRE-RENDER all frames first (slow part happens here)
+  const frames: number[][] = [];
   const canvas = document.createElement('canvas');
   canvas.width = SPLASH_WIDTH;
   canvas.height = SPLASH_HEIGHT;
   const ctx = canvas.getContext('2d')!;
+  const logoX = Math.floor((SPLASH_WIDTH - logoImage.width) / 2);
+  const logoY = Math.floor((SPLASH_HEIGHT - logoImage.height) / 2);
   
   for (let frame = 1; frame <= FRAME_COUNT; frame++) {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
     
-    const logoX = Math.floor((SPLASH_WIDTH - logoImage.width) / 2);
-    const logoY = Math.floor((SPLASH_HEIGHT - logoImage.height) / 2);
     const t = frame / FRAME_COUNT;
     const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     const revealWidth = Math.floor(SPLASH_WIDTH * ease);
@@ -970,37 +956,46 @@ async function showSplashAnimation(): Promise<void> {
       ctx.fillRect(revealWidth, 0, 2, SPLASH_HEIGHT);
     }
     
-    const imageData = canvasToGrayscale(canvas);
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
-    );
-    await sleep(FRAME_DELAY);
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    const arrayBuffer = await blob.arrayBuffer();
+    frames.push(Array.from(new Uint8Array(arrayBuffer)));
   }
   
-  // Blink cursor (2 blinks)
-  const logoX = Math.floor((SPLASH_WIDTH - logoImage.width) / 2);
-  const logoY = Math.floor((SPLASH_HEIGHT - logoImage.height) / 2);
+  // Pre-render blink frames
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
+  ctx.drawImage(logoImage, logoX, logoY);
+  ctx.fillStyle = '#00ff00';
+  ctx.fillRect(SPLASH_WIDTH - 4, 0, 3, SPLASH_HEIGHT);
+  let blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+  let arrayBuffer = await blob.arrayBuffer();
+  const blinkOn = Array.from(new Uint8Array(arrayBuffer));
   
-  for (let blink = 0; blink < 2; blink++) {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-    ctx.drawImage(logoImage, logoX, logoY);
-    ctx.fillStyle = '#00ff00';
-    ctx.fillRect(SPLASH_WIDTH - 4, 0, 3, SPLASH_HEIGHT);
-    
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
+  ctx.drawImage(logoImage, logoX, logoY);
+  blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+  arrayBuffer = await blob.arrayBuffer();
+  const blinkOff = Array.from(new Uint8Array(arrayBuffer));
+  
+  // NOW PLAY the animation fast (all data is pre-rendered)
+  for (const frameData of frames) {
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: canvasToGrayscale(canvas) })
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: frameData })
     );
-    await sleep(120);
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-    ctx.drawImage(logoImage, logoX, logoY);
-    
+    await sleep(50);
+  }
+  
+  // Play blink animation
+  for (let i = 0; i < 3; i++) {
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: canvasToGrayscale(canvas) })
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: blinkOn })
     );
-    await sleep(120);
+    await sleep(100);
+    await bridge.updateImageRawData(
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: blinkOff })
+    );
+    await sleep(100);
   }
   
   await sleep(100);

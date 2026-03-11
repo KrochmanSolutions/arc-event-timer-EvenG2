@@ -905,8 +905,8 @@ async function showSplashAnimation(): Promise<void> {
   
   const SPLASH_WIDTH = 200;
   const SPLASH_HEIGHT = 100;
-  const FRAME_COUNT = 16;
-  const FRAME_DELAY = 60;
+  const FRAME_COUNT = 8;
+  const FRAME_DELAY = 20;
   
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
@@ -989,7 +989,7 @@ async function showSplashAnimation(): Promise<void> {
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
       );
-      await sleep(150);
+      await sleep(80);
       
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
@@ -1001,7 +1001,7 @@ async function showSplashAnimation(): Promise<void> {
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData })
       );
-      await sleep(150);
+      await sleep(80);
     }
   }
   
@@ -1040,10 +1040,10 @@ async function showSplashAnimation(): Promise<void> {
         imageData: Array.from(new Uint8Array(arrayBuffer)),
       })
     );
-    await sleep(60);
+    await sleep(30);
   }
   
-  await sleep(100);
+  await sleep(50);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

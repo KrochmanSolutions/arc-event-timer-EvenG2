@@ -783,14 +783,14 @@ async function showSplashAnimation(): Promise<void> {
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: frameData })
     );
-    await sleep(40);
+    // No delay - let natural render time dictate speed
   }
   
-  // Show final logo briefly
+  // Show final logo
   await bridge.updateImageRawData(
     new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: finalFrame })
   );
-  await sleep(300);
+  // No delay - proceed immediately
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -812,6 +812,8 @@ async function navigateToScreen(screen: Screen): Promise<void> {
   currentPage = 0;
   switch (screen) {
     case 'main':
+      // Re-fetch events when returning to main menu
+      await fetchEvents();
       await displayMainMenu();
       break;
     case 'favorites':

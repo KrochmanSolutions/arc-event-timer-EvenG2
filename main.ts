@@ -695,7 +695,6 @@ async function showSplashAnimation(): Promise<void> {
   
   const SPLASH_WIDTH = 200;
   const SPLASH_HEIGHT = 100;
-  const FRAME_COUNT = 8;
   
   // Create container
   await bridge.rebuildPageContainer(
@@ -714,83 +713,27 @@ async function showSplashAnimation(): Promise<void> {
     })
   );
   
-  // Load logo
-  let logoImage: HTMLImageElement;
-  try {
-    logoImage = await loadImage('/header.png');
-  } catch (err) {
-    return;
-  }
-  
-  const canvas = document.createElement('canvas');
-  canvas.width = SPLASH_WIDTH;
-  canvas.height = SPLASH_HEIGHT;
-  const ctx = canvas.getContext('2d')!;
-  const logoX = Math.floor((SPLASH_WIDTH - logoImage.width) / 2);
-  const logoY = Math.floor((SPLASH_HEIGHT - logoImage.height) / 2);
-  
-  // IMMEDIATELY render first frame (cursor at left edge)
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-  ctx.drawImage(logoImage, logoX, logoY);
-  ctx.fillRect(2, 0, SPLASH_WIDTH - 2, SPLASH_HEIGHT); // Cover most of logo
-  ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-  ctx.fillRect(2, 0, 2, SPLASH_HEIGHT); // Green cursor
-  
-  let blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-  let arrayBuffer = await blob.arrayBuffer();
-  const firstFrame = Array.from(new Uint8Array(arrayBuffer));
-  
-  // Show first frame immediately
-  await bridge.updateImageRawData(
-    new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: firstFrame })
-  );
-  
-  // Now pre-render remaining frames in background
+  // Load all 3 splash frames
+  const framePaths = ['/splash-frame-1.png', '/splash-frame-2.png', '/splash-frame-3.png'];
   const frames: number[][] = [];
-  for (let frame = 2; frame <= FRAME_COUNT; frame++) {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-    
-    const t = frame / FRAME_COUNT;
-    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    const revealWidth = Math.floor(SPLASH_WIDTH * ease);
-    
-    ctx.drawImage(logoImage, logoX, logoY);
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(revealWidth, 0, SPLASH_WIDTH - revealWidth, SPLASH_HEIGHT);
-    
-    if (frame < FRAME_COUNT) {
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-      ctx.fillRect(revealWidth, 0, 2, SPLASH_HEIGHT);
+  
+  for (const path of framePaths) {
+    try {
+      const response = await fetch(path);
+      const arrayBuffer = await response.arrayBuffer();
+      frames.push(Array.from(new Uint8Array(arrayBuffer)));
+    } catch (err) {
+      console.error(`Failed to load ${path}:`, err);
+      return;
     }
-    
-    blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    arrayBuffer = await blob.arrayBuffer();
-    frames.push(Array.from(new Uint8Array(arrayBuffer)));
   }
   
-  // Pre-render final logo frame (no cursor)
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, SPLASH_WIDTH, SPLASH_HEIGHT);
-  ctx.drawImage(logoImage, logoX, logoY);
-  blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-  arrayBuffer = await blob.arrayBuffer();
-  const finalFrame = Array.from(new Uint8Array(arrayBuffer));
-  
-  // Play remaining animation frames
+  // Play all frames - no delay, let natural render time dictate speed
   for (const frameData of frames) {
     await bridge.updateImageRawData(
       new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: frameData })
     );
-    // No delay - let natural render time dictate speed
   }
-  
-  // Show final logo
-  await bridge.updateImageRawData(
-    new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: finalFrame })
-  );
-  // No delay - proceed immediately
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

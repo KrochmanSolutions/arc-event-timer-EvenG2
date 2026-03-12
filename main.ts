@@ -1177,6 +1177,11 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         await displayAllEvents(nextPage);
         return;
       }
+      if (currentScreen === 'current-events') {
+        const nextPage = currentPage + 1 >= totalPages ? 0 : currentPage + 1;
+        await displayCurrentEvents(nextPage);
+        return;
+      }
       if (currentScreen === 'favorites') {
         const nextPage = currentPage + 1 >= totalPages ? 0 : currentPage + 1;
         await displayFavorites(nextPage);
@@ -1191,6 +1196,11 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         await displayAllEvents(prevPage);
         return;
       }
+      if (currentScreen === 'current-events') {
+        const prevPage = currentPage - 1 < 0 ? totalPages - 1 : currentPage - 1;
+        await displayCurrentEvents(prevPage);
+        return;
+      }
       if (currentScreen === 'favorites') {
         const prevPage = currentPage - 1 < 0 ? totalPages - 1 : currentPage - 1;
         await displayFavorites(prevPage);
@@ -1200,7 +1210,7 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     
     // Click (type 0) - return to menu from event screens
     if (textType === 0 || textType === undefined) {
-      if (currentScreen === 'favorites' || currentScreen === 'all-events') {
+      if (currentScreen === 'favorites' || currentScreen === 'current-events' || currentScreen === 'all-events') {
         await navigateToScreen('main');
         return;
       }

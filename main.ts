@@ -1036,8 +1036,8 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         } else if (itemName === 'Settings') {
           await navigateToScreen('settings');
         }
-      } else if (currentScreen === 'favorites' || currentScreen === 'all-events') {
-        // List events on these screens - shouldn't happen but handle anyway
+      } else if (currentScreen === 'favorites' || currentScreen === 'current-events' || currentScreen === 'all-events') {
+        // Click on event screens returns to main
         await navigateToScreen('main');
         return;
       } else if (currentScreen === 'settings') {
@@ -1146,7 +1146,7 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     
     // Single click (type 0 or undefined) - return to menu from event screens
     if (sysType === 0 || sysType === undefined) {
-      if (currentScreen === 'favorites' || currentScreen === 'all-events') {
+      if (currentScreen === 'favorites' || currentScreen === 'current-events' || currentScreen === 'all-events') {
         await navigateToScreen('main');
         return;
       }

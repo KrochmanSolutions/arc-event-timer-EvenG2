@@ -57,6 +57,7 @@ let userPrefs: UserPrefs = {
 
 // Pre-rendered image cache for instant navigation
 const imageCache: Map<string, number[]> = new Map();
+let cachedHeaderData: number[] | null = null;
 
 // Logging
 function logStatus(msg: string): void {
@@ -143,9 +144,40 @@ function formatEventShort(event: GameEvent): string {
 
 // Pre-load header PNG (only static asset)
 async function preloadImages(): Promise<void> {
-  const response = await fetch('/header.png');
-  const arrayBuffer = await response.arrayBuffer();
-  imageCache.set('header-logo', Array.from(new Uint8Array(arrayBuffer)));
+  // Load header.png and splash-frame-3.png in parallel
+  const [headerRes, splashRes] = await Promise.all([
+    fetch('/header.png'),
+    fetch('/splash-frame-3.png'),
+  ]);
+  
+  const [headerBuf, splashBuf] = await Promise.all([
+    headerRes.arrayBuffer(),
+    splashRes.arrayBuffer(),
+  ]);
+  
+  imageCache.set('header-logo', Array.from(new Uint8Array(headerBuf)));
+  
+  // Pre-render the header with splash frame 3
+  const HEADER_W = LOGO_WIDTH;
+  const HEADER_H = 48;
+  const SPLASH_W = 153;
+  const SPLASH_H = 30;
+  
+  const splashImg = await loadImage('/splash-frame-3.png');
+  const canvas = document.createElement('canvas');
+  canvas.width = HEADER_W;
+  canvas.height = HEADER_H;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, HEADER_W, HEADER_H);
+    const splashX = Math.floor((HEADER_W - SPLASH_W) / 2);
+    const splashY = Math.floor((HEADER_H - SPLASH_H) / 2);
+    ctx.drawImage(splashImg, splashX, splashY, SPLASH_W, SPLASH_H);
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    const arrayBuffer = await blob.arrayBuffer();
+    cachedHeaderData = Array.from(new Uint8Array(arrayBuffer));
+  }
 }
 
 // Image helpers
@@ -367,16 +399,22 @@ async function sendHeaderWithHint(): Promise<void> {
 
 // Send just the final header frame (no animation) - used after page rebuild
 async function sendHeaderFinal(): Promise<void> {
-  if (!bridge) return;
-  if (currentScreen !== 'main') return; // Only update header on main screen
+  if (!bridge || currentScreen !== 'main') return;
   
   try {
+    // Use cached header if available
+    if (cachedHeaderData) {
+      await bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData: cachedHeaderData })
+      );
+      return;
+    }
+    
     const HEADER_W = LOGO_WIDTH;
     const HEADER_H = 48;
     const SPLASH_W = 153;
     const SPLASH_H = 30;
     
-    // Just send frame 3 (the final header)
     const splashImg = await loadImage('/splash-frame-3.png');
     const canvas = document.createElement('canvas');
     canvas.width = HEADER_W;
@@ -393,142 +431,123 @@ async function sendHeaderFinal(): Promise<void> {
     
     const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
     const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
+    cachedHeaderData = Array.from(new Uint8Array(arrayBuffer));
+    
+    if (currentScreen !== 'main') return;
+    
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData: cachedHeaderData })
     );
   } catch (err) {
     console.error('[IMAGE] Header final error:', err);
   }
 }
 
-// Send current events panel as tiled images (max 200x100 each)
+// Send current events panel as tiled images (max 200x100 each) - optimized single render
 async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, tileH: number): Promise<void> {
-  if (!bridge) return;
-  
-  // Capture starting screen to abort if user navigates away
-  const startingScreen = currentScreen;
+  if (!bridge || currentScreen !== 'main') return;
   
   try {
     const fullHeight = tileH * 2;
     const lineHeight = 32;
     const timerX = tileW - 8;
-    
-    // Helper to render canvas up to a certain number of events and send tiles
-    const renderAndSend = async (eventCount: number, sendTile0: boolean, sendTile1: boolean) => {
-      // Abort if screen changed
-      if (currentScreen !== startingScreen) return;
-      
-      const canvas = document.createElement('canvas');
-      canvas.width = tileW;
-      canvas.height = fullHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, tileW, fullHeight);
-      
-      // Header
-      ctx.fillStyle = '#00ff00';
-      ctx.font = 'bold 12px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText('CURRENT', 4, 14);
-      
-      ctx.fillStyle = '#888888';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText('2x Tap=Refresh', tileW - 4, 14);
-      ctx.textAlign = 'left';
-      
-      // Divider
-      ctx.strokeStyle = '#444444';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(4, 20);
-      ctx.lineTo(tileW - 4, 20);
-      ctx.stroke();
-      
-      if (events.length === 0 && eventCount === 0) {
-        ctx.fillStyle = '#888888';
-        ctx.font = '11px monospace';
-        ctx.fillText('No active events', 4, 38);
-      } else {
-        let y = 34;
-        for (let i = 0; i < Math.min(eventCount, events.length); i++) {
-          const event = events[i];
-          const now = Date.now();
-          const timeLeft = event.endTime ? formatDuration(event.endTime - now) : 'Now';
-          
-          ctx.fillStyle = '#00cccc';
-          ctx.font = 'bold 11px monospace';
-          ctx.textAlign = 'left';
-          ctx.fillText(event.map?.substring(0, 18) || '', 4, y);
-          
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '10px monospace';
-          ctx.fillText(event.name?.substring(0, 20) || '', 4, y + 12);
-          
-          ctx.fillStyle = '#ffaa00';
-          ctx.font = 'bold 10px monospace';
-          ctx.textAlign = 'right';
-          ctx.fillText(timeLeft, timerX, y + 6);
-          
-          y += lineHeight;
-          if (y > fullHeight - 16) break;
-        }
-      }
-      
-      // Pre-render both tiles to image data first
-      const tileUpdates: Promise<void>[] = [];
-      
-      if (sendTile0) {
-        const tile0Canvas = document.createElement('canvas');
-        tile0Canvas.width = tileW;
-        tile0Canvas.height = tileH;
-        const tile0Ctx = tile0Canvas.getContext('2d');
-        if (tile0Ctx) {
-          tile0Ctx.drawImage(canvas, 0, 0, tileW, tileH, 0, 0, tileW, tileH);
-          const blob0 = await new Promise<Blob>((resolve) => tile0Canvas.toBlob(resolve!, 'image/png'));
-          const arrayBuffer0 = await blob0.arrayBuffer();
-          const imageData0 = Array.from(new Uint8Array(arrayBuffer0));
-          tileUpdates.push(
-            bridge.updateImageRawData(
-              new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData: imageData0 })
-            )
-          );
-        }
-      }
-      
-      if (sendTile1) {
-        const tile1Canvas = document.createElement('canvas');
-        tile1Canvas.width = tileW;
-        tile1Canvas.height = tileH;
-        const tile1Ctx = tile1Canvas.getContext('2d');
-        if (tile1Ctx) {
-          tile1Ctx.drawImage(canvas, 0, tileH, tileW, tileH, 0, 0, tileW, tileH);
-          const blob1 = await new Promise<Blob>((resolve) => tile1Canvas.toBlob(resolve!, 'image/png'));
-          const arrayBuffer1 = await blob1.arrayBuffer();
-          const imageData1 = Array.from(new Uint8Array(arrayBuffer1));
-          tileUpdates.push(
-            bridge.updateImageRawData(
-              new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData: imageData1 })
-            )
-          );
-        }
-      }
-      
-      // Send both tiles simultaneously
-      await Promise.all(tileUpdates);
-    };
-    
-    // Stage 1: Just the header (no events) - initialize BOTH tiles
-    await renderAndSend(0, true, true);
-    
-    // Stage 2+: Add events one by one (minimal delay)
     const maxEvents = Math.min(events.length, 6);
-    for (let i = 1; i <= maxEvents; i++) {
-      await renderAndSend(i, true, true);
+    
+    // Single canvas render with all content
+    const canvas = document.createElement('canvas');
+    canvas.width = tileW;
+    canvas.height = fullHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, tileW, fullHeight);
+    
+    // Header
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('CURRENT', 4, 14);
+    
+    ctx.fillStyle = '#888888';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('2x Tap=Refresh', tileW - 4, 14);
+    ctx.textAlign = 'left';
+    
+    // Divider
+    ctx.strokeStyle = '#444444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(4, 20);
+    ctx.lineTo(tileW - 4, 20);
+    ctx.stroke();
+    
+    if (maxEvents === 0) {
+      ctx.fillStyle = '#888888';
+      ctx.font = '11px monospace';
+      ctx.fillText('No active events', 4, 38);
+    } else {
+      let y = 34;
+      for (let i = 0; i < maxEvents; i++) {
+        const event = events[i];
+        const now = Date.now();
+        const timeLeft = event.endTime ? formatDuration(event.endTime - now) : 'Now';
+        
+        ctx.fillStyle = '#00cccc';
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(event.map?.substring(0, 18) || '', 4, y);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '10px monospace';
+        ctx.fillText(event.name?.substring(0, 20) || '', 4, y + 12);
+        
+        ctx.fillStyle = '#ffaa00';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(timeLeft, timerX, y + 6);
+        
+        y += lineHeight;
+        if (y > fullHeight - 16) break;
+      }
     }
+    
+    // Abort if navigated away during render
+    if (currentScreen !== 'main') return;
+    
+    // Extract both tiles and convert to PNG in parallel
+    const tile0Canvas = document.createElement('canvas');
+    tile0Canvas.width = tileW;
+    tile0Canvas.height = tileH;
+    tile0Canvas.getContext('2d')!.drawImage(canvas, 0, 0, tileW, tileH, 0, 0, tileW, tileH);
+    
+    const tile1Canvas = document.createElement('canvas');
+    tile1Canvas.width = tileW;
+    tile1Canvas.height = tileH;
+    tile1Canvas.getContext('2d')!.drawImage(canvas, 0, tileH, tileW, tileH, 0, 0, tileW, tileH);
+    
+    // Convert both to blobs in parallel
+    const [blob0, blob1] = await Promise.all([
+      new Promise<Blob>((resolve) => tile0Canvas.toBlob(resolve!, 'image/png')),
+      new Promise<Blob>((resolve) => tile1Canvas.toBlob(resolve!, 'image/png')),
+    ]);
+    
+    // Convert to array buffers in parallel
+    const [buf0, buf1] = await Promise.all([blob0.arrayBuffer(), blob1.arrayBuffer()]);
+    
+    // Abort if navigated away
+    if (currentScreen !== 'main') return;
+    
+    // Send both tiles simultaneously
+    await Promise.all([
+      bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData: Array.from(new Uint8Array(buf0)) })
+      ),
+      bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData: Array.from(new Uint8Array(buf1)) })
+      ),
+    ]);
   } catch (err) {
     console.error('[IMAGE] Tiled panel error:', err);
   }
@@ -536,36 +555,10 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
 
 // Lightweight refresh for main menu - only updates event rows (no header animation)
 async function refreshMainMenuEvents(): Promise<void> {
-  if (!bridge) return;
-  if (currentScreen !== 'main') return; // Only refresh on main screen
-  
-  const panelTileWidth = 200;
-  const panelTileHeight = 100;
-  
-  // Clear both tiles simultaneously first
-  const clearCanvas = document.createElement('canvas');
-  clearCanvas.width = panelTileWidth;
-  clearCanvas.height = panelTileHeight;
-  const clearCtx = clearCanvas.getContext('2d');
-  if (clearCtx) {
-    clearCtx.fillStyle = '#000000';
-    clearCtx.fillRect(0, 0, panelTileWidth, panelTileHeight);
-    const clearBlob = await new Promise<Blob>((resolve) => clearCanvas.toBlob(resolve!, 'image/png'));
-    const clearBuffer = await clearBlob.arrayBuffer();
-    const clearData = Array.from(new Uint8Array(clearBuffer));
-    
-    // Send clear to both tiles at once
-    await Promise.all([
-      bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData: clearData })
-      ),
-      bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData: clearData })
-      ),
-    ]);
-  }
+  if (!bridge || currentScreen !== 'main') return;
   
   await fetchEvents();
+  if (currentScreen !== 'main') return;
   
   const now = Date.now();
   const activeEvents = allEvents.filter(e => e.startTime <= now).slice(0, 6);

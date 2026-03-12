@@ -266,52 +266,7 @@ async function displayMainMenu(): Promise<void> {
   const leftMargin = Math.floor((CANVAS_WIDTH - totalContentWidth) / 2);
   const panelX = leftMargin + menuWidth;
   
-  // Step 1: Create full layout with empty placeholder for menu
-  await bridge.rebuildPageContainer(
-    new RebuildPageContainer({
-      containerTotalNum: 4,
-      imageObject: [
-        new ImageContainerProperty({
-          containerID: 1,
-          containerName: 'header',
-          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
-          yPosition: 4,
-          width: LOGO_WIDTH,
-          height: 48,
-        }),
-        new ImageContainerProperty({
-          containerID: 2,
-          containerName: 'panel-tile-0',
-          xPosition: panelX,
-          yPosition: LIST_Y_OFFSET,
-          width: panelTileWidth,
-          height: panelTileHeight,
-        }),
-        // Placeholder image container where menu will be (empty/black)
-        new ImageContainerProperty({
-          containerID: 3,
-          containerName: 'menu-placeholder',
-          xPosition: leftMargin,
-          yPosition: LIST_Y_OFFSET,
-          width: menuWidth,
-          height: 100,
-        }),
-        new ImageContainerProperty({
-          containerID: 4,
-          containerName: 'panel-tile-1',
-          xPosition: panelX,
-          yPosition: LIST_Y_OFFSET + panelTileHeight,
-          width: panelTileWidth,
-          height: panelTileHeight,
-        }),
-      ],
-    })
-  );
-  
-  // Step 2: Play full header animation (all 3 frames - no rebuild to interrupt)
-  await sendHeaderWithHint();
-  
-  // Step 3: Rebuild with actual menu list
+  // Single rebuild with full layout
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
@@ -362,7 +317,7 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  // Step 4: Restore header frame 3 and load events
+  // Send header final frame + current events header together, then load event rows fast
   await sendHeaderFinal();
   await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
 }
@@ -560,16 +515,11 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
     
     // Stage 1: Just the header (no events) - initialize BOTH tiles
     await renderAndSend(0, true, true);
-    await sleep(30);
     
-    // Stage 2+: Add events one by one
-    // Layout: header ~20px, events start at y=34, each row is 32px
-    // Tile boundary at 100px, so event 3 (y=98-130) crosses into tile 1
-    // Always update both tiles to avoid visual glitches
+    // Stage 2+: Add events one by one (minimal delay)
     const maxEvents = Math.min(events.length, 6);
     for (let i = 1; i <= maxEvents; i++) {
       await renderAndSend(i, true, true);
-      await sleep(30);
     }
   } catch (err) {
     console.error('[IMAGE] Tiled panel error:', err);

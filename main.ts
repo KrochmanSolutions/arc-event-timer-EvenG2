@@ -266,7 +266,27 @@ async function displayMainMenu(): Promise<void> {
   const leftMargin = Math.floor((CANVAS_WIDTH - totalContentWidth) / 2);
   const panelX = leftMargin + menuWidth;
   
-  // Single rebuild with full layout
+  // Step 1: Create page with just header container first
+  await bridge.rebuildPageContainer(
+    new RebuildPageContainer({
+      containerTotalNum: 1,
+      imageObject: [
+        new ImageContainerProperty({
+          containerID: 1,
+          containerName: 'header',
+          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
+          yPosition: 4,
+          width: LOGO_WIDTH,
+          height: 48,
+        }),
+      ],
+    })
+  );
+  
+  // Step 2: Play header animation first (before anything else)
+  await sendHeaderWithHint();
+  
+  // Step 3: Rebuild with full layout
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
@@ -317,9 +337,9 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  // Send current events images first, then header animation
+  // Step 4: Re-send header (cleared by rebuild) and current events
+  await sendHeaderFinal();
   await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
-  await sendHeaderWithHint();
 }
 
 // Send combined header with logo and hint text (for main menu)
@@ -361,6 +381,42 @@ async function sendHeaderWithHint(): Promise<void> {
     // Frame 3 remains as the final header - no additional update needed
   } catch (err) {
     console.error('[IMAGE] Header error:', err);
+  }
+}
+
+// Send just the final header frame (no animation) - used after page rebuild
+async function sendHeaderFinal(): Promise<void> {
+  if (!bridge) return;
+  
+  try {
+    const HEADER_W = LOGO_WIDTH;
+    const HEADER_H = 48;
+    const SPLASH_W = 153;
+    const SPLASH_H = 30;
+    
+    // Just send frame 3 (the final header)
+    const splashImg = await loadImage('/splash-frame-3.png');
+    const canvas = document.createElement('canvas');
+    canvas.width = HEADER_W;
+    canvas.height = HEADER_H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, HEADER_W, HEADER_H);
+    
+    const splashX = Math.floor((HEADER_W - SPLASH_W) / 2);
+    const splashY = Math.floor((HEADER_H - SPLASH_H) / 2);
+    ctx.drawImage(splashImg, splashX, splashY, SPLASH_W, SPLASH_H);
+    
+    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+    const arrayBuffer = await blob.arrayBuffer();
+    const imageData = Array.from(new Uint8Array(arrayBuffer));
+    await bridge.updateImageRawData(
+      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
+    );
+  } catch (err) {
+    console.error('[IMAGE] Header final error:', err);
   }
 }
 
@@ -885,7 +941,6 @@ async function navigateToScreen(screen: Screen): Promise<void> {
 
 async function refreshAndDisplay(): Promise<void> {
   try {
-    await showSplashAnimation();
     await preloadImages();
     await fetchEvents();
     await navigateToScreen(userPrefs.autoLaunchScreen);

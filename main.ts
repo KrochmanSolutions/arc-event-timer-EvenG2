@@ -434,7 +434,9 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
         }
       }
       
-      // Extract and send requested tiles
+      // Pre-render both tiles to image data first
+      const tileUpdates: Promise<void>[] = [];
+      
       if (sendTile0) {
         const tile0Canvas = document.createElement('canvas');
         tile0Canvas.width = tileW;
@@ -442,11 +444,13 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
         const tile0Ctx = tile0Canvas.getContext('2d');
         if (tile0Ctx) {
           tile0Ctx.drawImage(canvas, 0, 0, tileW, tileH, 0, 0, tileW, tileH);
-          const blob = await new Promise<Blob>((resolve) => tile0Canvas.toBlob(resolve!, 'image/png'));
-          const arrayBuffer = await blob.arrayBuffer();
-          const imageData = Array.from(new Uint8Array(arrayBuffer));
-          await bridge.updateImageRawData(
-            new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData })
+          const blob0 = await new Promise<Blob>((resolve) => tile0Canvas.toBlob(resolve!, 'image/png'));
+          const arrayBuffer0 = await blob0.arrayBuffer();
+          const imageData0 = Array.from(new Uint8Array(arrayBuffer0));
+          tileUpdates.push(
+            bridge.updateImageRawData(
+              new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData: imageData0 })
+            )
           );
         }
       }
@@ -458,14 +462,19 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
         const tile1Ctx = tile1Canvas.getContext('2d');
         if (tile1Ctx) {
           tile1Ctx.drawImage(canvas, 0, tileH, tileW, tileH, 0, 0, tileW, tileH);
-          const blob = await new Promise<Blob>((resolve) => tile1Canvas.toBlob(resolve!, 'image/png'));
-          const arrayBuffer = await blob.arrayBuffer();
-          const imageData = Array.from(new Uint8Array(arrayBuffer));
-          await bridge.updateImageRawData(
-            new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData })
+          const blob1 = await new Promise<Blob>((resolve) => tile1Canvas.toBlob(resolve!, 'image/png'));
+          const arrayBuffer1 = await blob1.arrayBuffer();
+          const imageData1 = Array.from(new Uint8Array(arrayBuffer1));
+          tileUpdates.push(
+            bridge.updateImageRawData(
+              new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData: imageData1 })
+            )
           );
         }
       }
+      
+      // Send both tiles simultaneously
+      await Promise.all(tileUpdates);
     };
     
     // Stage 1: Just the header (no events) - initialize BOTH tiles

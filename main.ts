@@ -473,17 +473,18 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
     await sleep(80);
     
     // Stage 2+: Add events one by one
+    // Layout: header ~20px, events start at y=34, each row is 32px
+    // Tile boundary at 100px, so:
+    // - Event 1: y=34-66 (tile 0 only)
+    // - Event 2: y=66-98 (tile 0 only)
+    // - Event 3+: crosses into tile 1, need both tiles
     const maxEvents = Math.min(events.length, 6);
     for (let i = 1; i <= maxEvents; i++) {
-      // Events 1-3 are on tile 0, events 4-6 are on tile 1
-      const needsTile0 = i <= 3;
-      const needsTile1 = i > 3;
+      const needsTile0 = true; // Always update tile 0 (has header)
+      const needsTile1 = i >= 3; // Event 3+ crosses into tile 1
       await renderAndSend(i, needsTile0, needsTile1);
       await sleep(80);
     }
-    
-    // Final: send both tiles with all content
-    await renderAndSend(maxEvents, true, true);
   } catch (err) {
     console.error('[IMAGE] Tiled panel error:', err);
   }

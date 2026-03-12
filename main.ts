@@ -319,8 +319,9 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  await sendHeaderWithHint();
+  // Load order: current events image first, then header
   await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
+  await sendHeaderWithHint();
 }
 
 // Send combined header with logo and hint text (for main menu)
@@ -754,8 +755,8 @@ async function showSplashAnimation(): Promise<void> {
     await sleep(100);
   }
   
-  // Hold final frame briefly before proceeding
-  await sleep(200);
+  // Hold final frame longer before proceeding
+  await sleep(500);
   logStatus('Splash animation complete');
 }
 

@@ -329,19 +329,52 @@ async function sendHeaderWithHint(): Promise<void> {
   if (!bridge) return;
   
   try {
+    const HEADER_W = LOGO_WIDTH;
+    const HEADER_H = 48;
+    const SPLASH_W = 153;
+    const SPLASH_H = 30;
+    
+    // Animate through splash frames first (centered in header container)
+    const framePaths = ['/splash-frame-1.png', '/splash-frame-2.png', '/splash-frame-3.png'];
+    for (const path of framePaths) {
+      const splashImg = await loadImage(path);
+      const canvas = document.createElement('canvas');
+      canvas.width = HEADER_W;
+      canvas.height = HEADER_H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+      
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, HEADER_W, HEADER_H);
+      
+      // Center splash frame in header
+      const splashX = Math.floor((HEADER_W - SPLASH_W) / 2);
+      const splashY = Math.floor((HEADER_H - SPLASH_H) / 2);
+      ctx.drawImage(splashImg, splashX, splashY, SPLASH_W, SPLASH_H);
+      
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
+      const arrayBuffer = await blob.arrayBuffer();
+      const imageData = Array.from(new Uint8Array(arrayBuffer));
+      await bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
+      );
+      await sleep(100);
+    }
+    
+    // Final frame: show the actual header logo
     const canvas = document.createElement('canvas');
-    canvas.width = LOGO_WIDTH;
-    canvas.height = 48;
+    canvas.width = HEADER_W;
+    canvas.height = HEADER_H;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, LOGO_WIDTH, 48);
+    ctx.fillRect(0, 0, HEADER_W, HEADER_H);
     
     const logoImg = await loadImage('/header.png');
     const logoH = Math.min(logoImg.height, 40);
     const logoW = (logoImg.width / logoImg.height) * logoH;
-    const logoX = (LOGO_WIDTH - logoW) / 2;
+    const logoX = (HEADER_W - logoW) / 2;
     ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
     
     const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));

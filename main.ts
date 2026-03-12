@@ -58,6 +58,8 @@ let userPrefs: UserPrefs = {
 // Pre-rendered image cache for instant navigation
 const imageCache: Map<string, number[]> = new Map();
 let cachedHeaderData: number[] | null = null;
+let cachedPanelTile0: number[] | null = null;
+let cachedPanelTile1: number[] | null = null;
 
 // Logging
 function logStatus(msg: string): void {
@@ -350,9 +352,9 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  // Send header final frame + current events header together, then load event rows fast
+  // Send cached header and panel tiles (instant)
   await sendHeaderFinal();
-  await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
+  await sendCurrentEventsPanelFromCache();
 }
 
 // Send combined header with logo and hint text (for main menu)
@@ -443,128 +445,117 @@ async function sendHeaderFinal(): Promise<void> {
   }
 }
 
-// Send current events panel as tiled images (max 200x100 each) - optimized single render
-async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, tileH: number): Promise<void> {
+// Send current events panel from cache (instant)
+async function sendCurrentEventsPanelFromCache(): Promise<void> {
   if (!bridge || currentScreen !== 'main') return;
+  if (!cachedPanelTile0 || !cachedPanelTile1) return;
   
-  try {
-    const fullHeight = tileH * 2;
-    const lineHeight = 32;
-    const timerX = tileW - 8;
-    const maxEvents = Math.min(events.length, 6);
-    
-    // Single canvas render with all content
-    const canvas = document.createElement('canvas');
-    canvas.width = tileW;
-    canvas.height = fullHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, tileW, fullHeight);
-    
-    // Header
-    ctx.fillStyle = '#00ff00';
-    ctx.font = 'bold 12px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('CURRENT', 4, 14);
-    
+  await Promise.all([
+    bridge.updateImageRawData(
+      new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData: cachedPanelTile0 })
+    ),
+    bridge.updateImageRawData(
+      new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData: cachedPanelTile1 })
+    ),
+  ]);
+}
+
+// Render and cache current events panel tiles
+async function renderAndCacheCurrentEventsPanel(events: GameEvent[]): Promise<void> {
+  const tileW = 200;
+  const tileH = 100;
+  const fullHeight = tileH * 2;
+  const lineHeight = 32;
+  const timerX = tileW - 8;
+  const maxEvents = Math.min(events.length, 6);
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = tileW;
+  canvas.height = fullHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, tileW, fullHeight);
+  
+  // Header
+  ctx.fillStyle = '#00ff00';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('CURRENT', 4, 14);
+  
+  ctx.fillStyle = '#888888';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('2x Tap=Refresh', tileW - 4, 14);
+  ctx.textAlign = 'left';
+  
+  // Divider
+  ctx.strokeStyle = '#444444';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(4, 20);
+  ctx.lineTo(tileW - 4, 20);
+  ctx.stroke();
+  
+  if (maxEvents === 0) {
     ctx.fillStyle = '#888888';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText('2x Tap=Refresh', tileW - 4, 14);
-    ctx.textAlign = 'left';
-    
-    // Divider
-    ctx.strokeStyle = '#444444';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(4, 20);
-    ctx.lineTo(tileW - 4, 20);
-    ctx.stroke();
-    
-    if (maxEvents === 0) {
-      ctx.fillStyle = '#888888';
-      ctx.font = '11px monospace';
-      ctx.fillText('No active events', 4, 38);
-    } else {
-      let y = 34;
-      for (let i = 0; i < maxEvents; i++) {
-        const event = events[i];
-        const now = Date.now();
-        const timeLeft = event.endTime ? formatDuration(event.endTime - now) : 'Now';
-        
-        ctx.fillStyle = '#00cccc';
-        ctx.font = 'bold 11px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText(event.map?.substring(0, 18) || '', 4, y);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '10px monospace';
-        ctx.fillText(event.name?.substring(0, 20) || '', 4, y + 12);
-        
-        ctx.fillStyle = '#ffaa00';
-        ctx.font = 'bold 10px monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText(timeLeft, timerX, y + 6);
-        
-        y += lineHeight;
-        if (y > fullHeight - 16) break;
-      }
+    ctx.font = '11px monospace';
+    ctx.fillText('No active events', 4, 38);
+  } else {
+    let y = 34;
+    for (let i = 0; i < maxEvents; i++) {
+      const event = events[i];
+      const now = Date.now();
+      const timeLeft = event.endTime ? formatDuration(event.endTime - now) : 'Now';
+      
+      ctx.fillStyle = '#00cccc';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(event.map?.substring(0, 18) || '', 4, y);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px monospace';
+      ctx.fillText(event.name?.substring(0, 20) || '', 4, y + 12);
+      
+      ctx.fillStyle = '#ffaa00';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(timeLeft, timerX, y + 6);
+      
+      y += lineHeight;
+      if (y > fullHeight - 16) break;
     }
-    
-    // Abort if navigated away during render
-    if (currentScreen !== 'main') return;
-    
-    // Extract both tiles and convert to PNG in parallel
-    const tile0Canvas = document.createElement('canvas');
-    tile0Canvas.width = tileW;
-    tile0Canvas.height = tileH;
-    tile0Canvas.getContext('2d')!.drawImage(canvas, 0, 0, tileW, tileH, 0, 0, tileW, tileH);
-    
-    const tile1Canvas = document.createElement('canvas');
-    tile1Canvas.width = tileW;
-    tile1Canvas.height = tileH;
-    tile1Canvas.getContext('2d')!.drawImage(canvas, 0, tileH, tileW, tileH, 0, 0, tileW, tileH);
-    
-    // Convert both to blobs in parallel
-    const [blob0, blob1] = await Promise.all([
-      new Promise<Blob>((resolve) => tile0Canvas.toBlob(resolve!, 'image/png')),
-      new Promise<Blob>((resolve) => tile1Canvas.toBlob(resolve!, 'image/png')),
-    ]);
-    
-    // Convert to array buffers in parallel
-    const [buf0, buf1] = await Promise.all([blob0.arrayBuffer(), blob1.arrayBuffer()]);
-    
-    // Abort if navigated away
-    if (currentScreen !== 'main') return;
-    
-    // Send both tiles simultaneously
-    await Promise.all([
-      bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData: Array.from(new Uint8Array(buf0)) })
-      ),
-      bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData: Array.from(new Uint8Array(buf1)) })
-      ),
-    ]);
-  } catch (err) {
-    console.error('[IMAGE] Tiled panel error:', err);
   }
+  
+  // Extract both tiles
+  const tile0Canvas = document.createElement('canvas');
+  tile0Canvas.width = tileW;
+  tile0Canvas.height = tileH;
+  tile0Canvas.getContext('2d')!.drawImage(canvas, 0, 0, tileW, tileH, 0, 0, tileW, tileH);
+  
+  const tile1Canvas = document.createElement('canvas');
+  tile1Canvas.width = tileW;
+  tile1Canvas.height = tileH;
+  tile1Canvas.getContext('2d')!.drawImage(canvas, 0, tileH, tileW, tileH, 0, 0, tileW, tileH);
+  
+  // Convert to blobs in parallel
+  const [blob0, blob1] = await Promise.all([
+    new Promise<Blob>((resolve) => tile0Canvas.toBlob(resolve!, 'image/png')),
+    new Promise<Blob>((resolve) => tile1Canvas.toBlob(resolve!, 'image/png')),
+  ]);
+  
+  const [buf0, buf1] = await Promise.all([blob0.arrayBuffer(), blob1.arrayBuffer()]);
+  
+  // Cache the results
+  cachedPanelTile0 = Array.from(new Uint8Array(buf0));
+  cachedPanelTile1 = Array.from(new Uint8Array(buf1));
 }
 
 // Lightweight refresh for main menu - only updates event rows (no header animation)
+// Double-tap on main menu does full app refresh
 async function refreshMainMenuEvents(): Promise<void> {
-  if (!bridge || currentScreen !== 'main') return;
-  
-  await fetchEvents();
-  if (currentScreen !== 'main') return;
-  
-  const now = Date.now();
-  const activeEvents = allEvents.filter(e => e.startTime <= now).slice(0, 6);
-  
-  // Progressive load of event rows
-  await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
+  await refreshAndDisplay();
 }
 
 // ============ SCREEN: ALL EVENTS (upcoming only) ============
@@ -956,6 +947,12 @@ async function refreshAndDisplay(): Promise<void> {
   try {
     await preloadImages();
     await fetchEvents();
+    
+    // Pre-render and cache current events panel for main menu
+    const now = Date.now();
+    const activeEvents = allEvents.filter(e => e.startTime <= now).slice(0, 6);
+    await renderAndCacheCurrentEventsPanel(activeEvents);
+    
     await navigateToScreen(userPrefs.autoLaunchScreen);
   } catch (err) {
     console.error('[ERROR]', err);

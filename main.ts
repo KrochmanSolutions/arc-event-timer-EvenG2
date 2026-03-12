@@ -368,6 +368,7 @@ async function sendHeaderWithHint(): Promise<void> {
 // Send just the final header frame (no animation) - used after page rebuild
 async function sendHeaderFinal(): Promise<void> {
   if (!bridge) return;
+  if (currentScreen !== 'main') return; // Only update header on main screen
   
   try {
     const HEADER_W = LOGO_WIDTH;
@@ -405,6 +406,9 @@ async function sendHeaderFinal(): Promise<void> {
 async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, tileH: number): Promise<void> {
   if (!bridge) return;
   
+  // Capture starting screen to abort if user navigates away
+  const startingScreen = currentScreen;
+  
   try {
     const fullHeight = tileH * 2;
     const lineHeight = 32;
@@ -412,6 +416,9 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
     
     // Helper to render canvas up to a certain number of events and send tiles
     const renderAndSend = async (eventCount: number, sendTile0: boolean, sendTile1: boolean) => {
+      // Abort if screen changed
+      if (currentScreen !== startingScreen) return;
+      
       const canvas = document.createElement('canvas');
       canvas.width = tileW;
       canvas.height = fullHeight;
@@ -530,6 +537,7 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
 // Lightweight refresh for main menu - only updates event rows (no header animation)
 async function refreshMainMenuEvents(): Promise<void> {
   if (!bridge) return;
+  if (currentScreen !== 'main') return; // Only refresh on main screen
   
   const panelTileWidth = 200;
   const panelTileHeight = 100;

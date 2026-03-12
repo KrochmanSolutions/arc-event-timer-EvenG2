@@ -266,27 +266,7 @@ async function displayMainMenu(): Promise<void> {
   const leftMargin = Math.floor((CANVAS_WIDTH - totalContentWidth) / 2);
   const panelX = leftMargin + menuWidth;
   
-  // Step 1: Create page with just header container first
-  await bridge.rebuildPageContainer(
-    new RebuildPageContainer({
-      containerTotalNum: 1,
-      imageObject: [
-        new ImageContainerProperty({
-          containerID: 1,
-          containerName: 'header',
-          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
-          yPosition: 4,
-          width: LOGO_WIDTH,
-          height: 48,
-        }),
-      ],
-    })
-  );
-  
-  // Step 2: Play header animation first (before anything else)
-  await sendHeaderWithHint();
-  
-  // Step 3: Rebuild with full layout
+  // Single rebuild with full layout - no mid-animation rebuild
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
@@ -337,8 +317,10 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  // Step 4: Re-send header (cleared by rebuild) and current events
-  await sendHeaderFinal();
+  // Header animation plays first (no rebuild to clear it)
+  await sendHeaderWithHint();
+  
+  // Then current events load progressively
   await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
 }
 

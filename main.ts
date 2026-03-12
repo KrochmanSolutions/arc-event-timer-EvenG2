@@ -266,47 +266,7 @@ async function displayMainMenu(): Promise<void> {
   const leftMargin = Math.floor((CANVAS_WIDTH - totalContentWidth) / 2);
   const panelX = leftMargin + menuWidth;
   
-  // Step 1: Create page with only image containers (no menu list yet)
-  // Use containerID 4 for panel-tile-1 to match final layout
-  await bridge.rebuildPageContainer(
-    new RebuildPageContainer({
-      containerTotalNum: 3,
-      imageObject: [
-        // Combined header with logo (200x48)
-        new ImageContainerProperty({
-          containerID: 1,
-          containerName: 'header',
-          xPosition: Math.floor((CANVAS_WIDTH - LOGO_WIDTH) / 2),
-          yPosition: 4,
-          width: LOGO_WIDTH,
-          height: 48,
-        }),
-        // Panel tile 1 (top)
-        new ImageContainerProperty({
-          containerID: 2,
-          containerName: 'panel-tile-0',
-          xPosition: panelX,
-          yPosition: LIST_Y_OFFSET,
-          width: panelTileWidth,
-          height: panelTileHeight,
-        }),
-        // Panel tile 2 (bottom) - use ID 4 to match sendCurrentEventsPanelTiled
-        new ImageContainerProperty({
-          containerID: 4,
-          containerName: 'panel-tile-1',
-          xPosition: panelX,
-          yPosition: LIST_Y_OFFSET + panelTileHeight,
-          width: panelTileWidth,
-          height: panelTileHeight,
-        }),
-      ],
-    })
-  );
-  
-  // Step 2: Send current events panel images first
-  await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
-  
-  // Step 3: Rebuild page with full content including menu list
+  // Single rebuild with full layout
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
@@ -357,7 +317,7 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  // Step 4: Re-send panel images (they were cleared by rebuild) and then header animation
+  // Send current events images first, then header animation
   await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
   await sendHeaderWithHint();
 }

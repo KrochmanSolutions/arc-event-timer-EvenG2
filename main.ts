@@ -372,7 +372,7 @@ async function sendHeaderWithHint(): Promise<void> {
     const SPLASH_W = 153;
     const SPLASH_H = 30;
     
-    // Animate through splash frames first (centered in header container)
+    // Animate through splash frames - frame 3 becomes the final header
     const framePaths = ['/splash-frame-1.png', '/splash-frame-2.png', '/splash-frame-3.png'];
     for (const path of framePaths) {
       const splashImg = await loadImage(path);
@@ -385,7 +385,7 @@ async function sendHeaderWithHint(): Promise<void> {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, HEADER_W, HEADER_H);
       
-      // Center splash frame in header
+      // Center splash frame in header - same position for all frames
       const splashX = Math.floor((HEADER_W - SPLASH_W) / 2);
       const splashY = Math.floor((HEADER_H - SPLASH_H) / 2);
       ctx.drawImage(splashImg, splashX, splashY, SPLASH_W, SPLASH_H);
@@ -398,29 +398,7 @@ async function sendHeaderWithHint(): Promise<void> {
       );
       await sleep(100);
     }
-    
-    // Final frame: show the actual header logo
-    const canvas = document.createElement('canvas');
-    canvas.width = HEADER_W;
-    canvas.height = HEADER_H;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, HEADER_W, HEADER_H);
-    
-    const logoImg = await loadImage('/header.png');
-    const logoH = Math.min(logoImg.height, 40);
-    const logoW = (logoImg.width / logoImg.height) * logoH;
-    const logoX = (HEADER_W - logoW) / 2;
-    ctx.drawImage(logoImg, logoX, 2, logoW, logoH);
-    
-    const blob = await new Promise<Blob>((resolve) => canvas.toBlob(resolve!, 'image/png'));
-    const arrayBuffer = await blob.arrayBuffer();
-    const imageData = Array.from(new Uint8Array(arrayBuffer));
-    await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
-    );
+    // Frame 3 remains as the final header - no additional update needed
   } catch (err) {
     console.error('[IMAGE] Header error:', err);
   }
@@ -495,11 +473,13 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
       }
     }
     
-    // Extract and send each tile
+    // Pre-render both tiles to number[] format first
     const tiles = [
       { id: 2, name: 'panel-tile-0', y: 0 },
       { id: 4, name: 'panel-tile-1', y: tileH },
     ];
+    
+    const tileData: { id: number; name: string; imageData: number[] }[] = [];
     
     for (const tile of tiles) {
       const tileCanvas = document.createElement('canvas');
@@ -510,14 +490,18 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
       
       tileCtx.drawImage(canvas, 0, tile.y, tileW, tileH, 0, 0, tileW, tileH);
       
-      // Convert to number[] format (recommended for real hardware)
       const blob = await new Promise<Blob>((resolve) => tileCanvas.toBlob(resolve!, 'image/png'));
       const arrayBuffer = await blob.arrayBuffer();
       const imageData = Array.from(new Uint8Array(arrayBuffer));
-      await bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: tile.id, containerName: tile.name, imageData })
-      );
+      tileData.push({ id: tile.id, name: tile.name, imageData });
     }
+    
+    // Send all tiles together (no await between sends)
+    await Promise.all(tileData.map(tile => 
+      bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: tile.id, containerName: tile.name, imageData: tile.imageData })
+      )
+    ));
   } catch (err) {
     console.error('[IMAGE] Tiled panel error:', err);
   }

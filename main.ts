@@ -266,10 +266,10 @@ async function displayMainMenu(): Promise<void> {
   const leftMargin = Math.floor((CANVAS_WIDTH - totalContentWidth) / 2);
   const panelX = leftMargin + menuWidth;
   
-  // Step 1: Create page with ONLY header container
+  // Step 1: Create full layout with empty placeholder for menu
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
-      containerTotalNum: 1,
+      containerTotalNum: 4,
       imageObject: [
         new ImageContainerProperty({
           containerID: 1,
@@ -279,14 +279,39 @@ async function displayMainMenu(): Promise<void> {
           width: LOGO_WIDTH,
           height: 48,
         }),
+        new ImageContainerProperty({
+          containerID: 2,
+          containerName: 'panel-tile-0',
+          xPosition: panelX,
+          yPosition: LIST_Y_OFFSET,
+          width: panelTileWidth,
+          height: panelTileHeight,
+        }),
+        // Placeholder image container where menu will be (empty/black)
+        new ImageContainerProperty({
+          containerID: 3,
+          containerName: 'menu-placeholder',
+          xPosition: leftMargin,
+          yPosition: LIST_Y_OFFSET,
+          width: menuWidth,
+          height: 100,
+        }),
+        new ImageContainerProperty({
+          containerID: 4,
+          containerName: 'panel-tile-1',
+          xPosition: panelX,
+          yPosition: LIST_Y_OFFSET + panelTileHeight,
+          width: panelTileWidth,
+          height: panelTileHeight,
+        }),
       ],
     })
   );
   
-  // Step 2: Play full header animation (all 3 frames)
+  // Step 2: Play full header animation (all 3 frames - no rebuild to interrupt)
   await sendHeaderWithHint();
   
-  // Step 3: Rebuild with full layout (menu + panels)
+  // Step 3: Rebuild with actual menu list
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 4,
@@ -337,7 +362,7 @@ async function displayMainMenu(): Promise<void> {
     })
   );
   
-  // Step 4: Immediately restore header frame 3, then load events
+  // Step 4: Restore header frame 3 and load events
   await sendHeaderFinal();
   await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
 }

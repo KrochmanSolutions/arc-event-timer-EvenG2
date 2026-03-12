@@ -25,7 +25,7 @@ const MAX_LIST_ITEMS = 20;
 const EVENTS_PER_PAGE = 7; // Fits on screen
 
 // Screen types
-type Screen = 'main' | 'favorites' | 'all-events' | 'settings' | 'settings-autolaunch' | 'settings-event-types';
+type Screen = 'main' | 'favorites' | 'current-events' | 'all-events' | 'settings' | 'settings-autolaunch' | 'settings-event-types';
 
 // Event types in the game
 const EVENT_TYPES = [
@@ -250,6 +250,7 @@ async function displayMainMenu(): Promise<void> {
   // Menu items on left
   const menuItems = [
     'Favorite Events',
+    'All Current Events',
     'All Upcoming Events', 
     'Settings',
   ];
@@ -598,6 +599,39 @@ async function displayAllEvents(page: number = 0): Promise<void> {
   await displayEventsList(listItems, `${page + 1}/${totalPages}`, 'Scroll=Pg  Click=Menu', 'All Upcoming');
 }
 
+// ============ SCREEN: CURRENT EVENTS ============
+async function displayCurrentEvents(page: number = 0): Promise<void> {
+  if (!bridge) return;
+  
+  currentScreen = 'current-events';
+  currentPage = page;
+  const now = Date.now();
+  
+  const currentEvents = allEvents.filter(e => e.startTime <= now);
+  const totalEvents = currentEvents.length;
+  totalPages = Math.ceil(totalEvents / EVENTS_PER_PAGE) || 1;
+  
+  if (totalEvents === 0) {
+    totalPages = 1;
+    currentListItems = ['No current events', '', 'Click to return'];
+    await displayEventsList(currentListItems, 'CURRENT', 'Click=Menu', 'All Current');
+    return;
+  }
+  
+  const startIdx = page * EVENTS_PER_PAGE;
+  const endIdx = Math.min(startIdx + EVENTS_PER_PAGE, totalEvents);
+  const pageEvents = currentEvents.slice(startIdx, endIdx);
+  hasMorePages = endIdx < totalEvents;
+  
+  const listItems: string[] = [];
+  for (const event of pageEvents) {
+    listItems.push(formatEventItem(event));
+  }
+  
+  currentListItems = listItems;
+  await displayEventsList(listItems, `${page + 1}/${totalPages}`, 'Scroll=Pg  Click=Menu', 'All Current');
+}
+
 // ============ SCREEN: FAVORITES ============
 async function displayFavorites(page: number = 0): Promise<void> {
   if (!bridge) return;
@@ -662,7 +696,7 @@ async function displaySettingsAutoLaunch(): Promise<void> {
   if (!bridge) return;
   
   currentScreen = 'settings-autolaunch';
-  const options: Screen[] = ['main', 'favorites', 'all-events'];
+  const options: Screen[] = ['main', 'favorites', 'current-events', 'all-events'];
   const listItems = [
     '<<< Back to Settings',
     ...options.map(o => `${o === userPrefs.autoLaunchScreen ? '[X] ' : '[ ] '}${o}`),
@@ -899,6 +933,9 @@ async function navigateToScreen(screen: Screen): Promise<void> {
     case 'favorites':
       await displayFavorites();
       break;
+    case 'current-events':
+      await displayCurrentEvents();
+      break;
     case 'all-events':
       await displayAllEvents();
       break;
@@ -968,6 +1005,16 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
         return;
       }
     }
+    if (currentScreen === 'current-events') {
+      if ((isScrollBottom || (atLastItem && !isClick && !isDoubleClick)) && hasMorePages) {
+        await displayCurrentEvents(currentPage + 1);
+        return;
+      }
+      if ((isScrollTop || (atFirstItem && !isClick && !isDoubleClick)) && currentPage > 0) {
+        await displayCurrentEvents(currentPage - 1);
+        return;
+      }
+    }
     if (currentScreen === 'favorites') {
       if ((isScrollBottom || (atLastItem && !isClick && !isDoubleClick)) && hasMorePages) {
         await displayFavorites(currentPage + 1);
@@ -984,6 +1031,8 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
       if (currentScreen === 'main') {
         if (itemName === 'Favorite Events') {
           await navigateToScreen('favorites');
+        } else if (itemName === 'All Current Events') {
+          await navigateToScreen('current-events');
         } else if (itemName === 'All Upcoming Events') {
           await navigateToScreen('all-events');
         } else if (itemName === 'Settings') {
@@ -1026,7 +1075,11 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
           userPrefs.autoLaunchScreen = 'favorites';
           savePrefs();
           await displaySettingsAutoLaunch();
-        } else if (itemName.includes('all-events') || itemIndex === 3) {
+        } else if (itemName.includes('current-events') || itemIndex === 3) {
+          userPrefs.autoLaunchScreen = 'current-events';
+          savePrefs();
+          await displaySettingsAutoLaunch();
+        } else if (itemName.includes('all-events') || itemIndex === 4) {
           userPrefs.autoLaunchScreen = 'all-events';
           savePrefs();
           await displaySettingsAutoLaunch();
@@ -1189,6 +1242,8 @@ async function init(): Promise<void> {
     // Only auto-refresh display if on events screens
     if (currentScreen === 'all-events') {
       await displayAllEvents(currentPage);
+    } else if (currentScreen === 'current-events') {
+      await displayCurrentEvents(currentPage);
     } else if (currentScreen === 'favorites') {
       await displayFavorites(currentPage);
     } else if (currentScreen === 'main') {

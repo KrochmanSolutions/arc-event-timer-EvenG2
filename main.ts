@@ -369,99 +369,121 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
   if (!bridge) return;
   
   try {
-    // Draw to a canvas covering both tiles
     const fullHeight = tileH * 2;
-    const canvas = document.createElement('canvas');
-    canvas.width = tileW;
-    canvas.height = fullHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const lineHeight = 32;
+    const timerX = tileW - 8;
     
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, tileW, fullHeight);
-    
-    // Header
-    ctx.fillStyle = '#00ff00';
-    ctx.font = 'bold 12px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('CURRENT', 4, 14);
-    
-    // Hint (same line as CURRENT, right-aligned)
-    ctx.fillStyle = '#888888';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText('2x Tap=Refresh', tileW - 4, 14);
-    ctx.textAlign = 'left';
-    
-    // Divider
-    ctx.strokeStyle = '#444444';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(4, 20);
-    ctx.lineTo(tileW - 4, 20);
-    ctx.stroke();
-    
-    if (events.length === 0) {
+    // Helper to render canvas up to a certain number of events and send tiles
+    const renderAndSend = async (eventCount: number, sendTile0: boolean, sendTile1: boolean) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = tileW;
+      canvas.height = fullHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, tileW, fullHeight);
+      
+      // Header
+      ctx.fillStyle = '#00ff00';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('CURRENT', 4, 14);
+      
       ctx.fillStyle = '#888888';
-      ctx.font = '11px monospace';
-      ctx.fillText('No active events', 4, 38);
-    } else {
-      const lineHeight = 32;
-      let y = 34;
-      const timerX = tileW - 8;
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('2x Tap=Refresh', tileW - 4, 14);
+      ctx.textAlign = 'left';
       
-      for (const event of events) {
-        const now = Date.now();
-        const timeLeft = event.endTime ? formatDuration(event.endTime - now) : 'Now';
-        
-        ctx.fillStyle = '#00cccc';
-        ctx.font = 'bold 11px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText(event.map?.substring(0, 18) || '', 4, y);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '10px monospace';
-        ctx.fillText(event.name?.substring(0, 20) || '', 4, y + 12);
-        
-        ctx.fillStyle = '#ffaa00';
-        ctx.font = 'bold 10px monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText(timeLeft, timerX, y + 6);
-        
-        y += lineHeight;
-        if (y > fullHeight - 16) break;
+      // Divider
+      ctx.strokeStyle = '#444444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(4, 20);
+      ctx.lineTo(tileW - 4, 20);
+      ctx.stroke();
+      
+      if (events.length === 0 && eventCount === 0) {
+        ctx.fillStyle = '#888888';
+        ctx.font = '11px monospace';
+        ctx.fillText('No active events', 4, 38);
+      } else {
+        let y = 34;
+        for (let i = 0; i < Math.min(eventCount, events.length); i++) {
+          const event = events[i];
+          const now = Date.now();
+          const timeLeft = event.endTime ? formatDuration(event.endTime - now) : 'Now';
+          
+          ctx.fillStyle = '#00cccc';
+          ctx.font = 'bold 11px monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText(event.map?.substring(0, 18) || '', 4, y);
+          
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '10px monospace';
+          ctx.fillText(event.name?.substring(0, 20) || '', 4, y + 12);
+          
+          ctx.fillStyle = '#ffaa00';
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText(timeLeft, timerX, y + 6);
+          
+          y += lineHeight;
+          if (y > fullHeight - 16) break;
+        }
       }
+      
+      // Extract and send requested tiles
+      if (sendTile0) {
+        const tile0Canvas = document.createElement('canvas');
+        tile0Canvas.width = tileW;
+        tile0Canvas.height = tileH;
+        const tile0Ctx = tile0Canvas.getContext('2d');
+        if (tile0Ctx) {
+          tile0Ctx.drawImage(canvas, 0, 0, tileW, tileH, 0, 0, tileW, tileH);
+          const blob = await new Promise<Blob>((resolve) => tile0Canvas.toBlob(resolve!, 'image/png'));
+          const arrayBuffer = await blob.arrayBuffer();
+          const imageData = Array.from(new Uint8Array(arrayBuffer));
+          await bridge.updateImageRawData(
+            new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData })
+          );
+        }
+      }
+      
+      if (sendTile1) {
+        const tile1Canvas = document.createElement('canvas');
+        tile1Canvas.width = tileW;
+        tile1Canvas.height = tileH;
+        const tile1Ctx = tile1Canvas.getContext('2d');
+        if (tile1Ctx) {
+          tile1Ctx.drawImage(canvas, 0, tileH, tileW, tileH, 0, 0, tileW, tileH);
+          const blob = await new Promise<Blob>((resolve) => tile1Canvas.toBlob(resolve!, 'image/png'));
+          const arrayBuffer = await blob.arrayBuffer();
+          const imageData = Array.from(new Uint8Array(arrayBuffer));
+          await bridge.updateImageRawData(
+            new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData })
+          );
+        }
+      }
+    };
+    
+    // Stage 1: Just the header (no events)
+    await renderAndSend(0, true, false);
+    await sleep(80);
+    
+    // Stage 2+: Add events one by one
+    const maxEvents = Math.min(events.length, 6);
+    for (let i = 1; i <= maxEvents; i++) {
+      // Events 1-3 are on tile 0, events 4-6 are on tile 1
+      const needsTile0 = i <= 3;
+      const needsTile1 = i > 3;
+      await renderAndSend(i, needsTile0, needsTile1);
+      await sleep(80);
     }
     
-    // Pre-render both tiles to number[] format first
-    const tiles = [
-      { id: 2, name: 'panel-tile-0', y: 0 },
-      { id: 4, name: 'panel-tile-1', y: tileH },
-    ];
-    
-    const tileData: { id: number; name: string; imageData: number[] }[] = [];
-    
-    for (const tile of tiles) {
-      const tileCanvas = document.createElement('canvas');
-      tileCanvas.width = tileW;
-      tileCanvas.height = tileH;
-      const tileCtx = tileCanvas.getContext('2d');
-      if (!tileCtx) continue;
-      
-      tileCtx.drawImage(canvas, 0, tile.y, tileW, tileH, 0, 0, tileW, tileH);
-      
-      const blob = await new Promise<Blob>((resolve) => tileCanvas.toBlob(resolve!, 'image/png'));
-      const arrayBuffer = await blob.arrayBuffer();
-      const imageData = Array.from(new Uint8Array(arrayBuffer));
-      tileData.push({ id: tile.id, name: tile.name, imageData });
-    }
-    
-    // Send all tiles together (no await between sends)
-    await Promise.all(tileData.map(tile => 
-      bridge.updateImageRawData(
-        new ImageRawDataUpdate({ containerID: tile.id, containerName: tile.name, imageData: tile.imageData })
-      )
-    ));
+    // Final: send both tiles with all content
+    await renderAndSend(maxEvents, true, true);
   } catch (err) {
     console.error('[IMAGE] Tiled panel error:', err);
   }

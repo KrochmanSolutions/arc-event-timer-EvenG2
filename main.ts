@@ -468,26 +468,37 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
       }
     };
     
-    // Stage 1: Just the header (no events)
-    await renderAndSend(0, true, false);
+    // Stage 1: Just the header (no events) - initialize BOTH tiles
+    await renderAndSend(0, true, true);
     await sleep(80);
     
     // Stage 2+: Add events one by one
     // Layout: header ~20px, events start at y=34, each row is 32px
-    // Tile boundary at 100px, so:
-    // - Event 1: y=34-66 (tile 0 only)
-    // - Event 2: y=66-98 (tile 0 only)
-    // - Event 3+: crosses into tile 1, need both tiles
+    // Tile boundary at 100px, so event 3 (y=98-130) crosses into tile 1
+    // Always update both tiles to avoid visual glitches
     const maxEvents = Math.min(events.length, 6);
     for (let i = 1; i <= maxEvents; i++) {
-      const needsTile0 = true; // Always update tile 0 (has header)
-      const needsTile1 = i >= 3; // Event 3+ crosses into tile 1
-      await renderAndSend(i, needsTile0, needsTile1);
+      await renderAndSend(i, true, true);
       await sleep(80);
     }
   } catch (err) {
     console.error('[IMAGE] Tiled panel error:', err);
   }
+}
+
+// Lightweight refresh for main menu - only updates event rows (no header animation)
+async function refreshMainMenuEvents(): Promise<void> {
+  if (!bridge) return;
+  
+  await fetchEvents();
+  
+  const now = Date.now();
+  const activeEvents = allEvents.filter(e => e.startTime <= now).slice(0, 6);
+  const panelTileWidth = 200;
+  const panelTileHeight = 100;
+  
+  // Only refresh the event rows, skip header
+  await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
 }
 
 // ============ SCREEN: ALL EVENTS (upcoming only) ============
@@ -870,7 +881,11 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     
     // Double-tap refreshes
     if (isDoubleClick) {
-      await refreshAndDisplay();
+      if (currentScreen === 'main') {
+        await refreshMainMenuEvents();
+      } else {
+        await refreshAndDisplay();
+      }
       return;
     }
     
@@ -990,7 +1005,11 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     
     // Double-tap refresh
     if (sysType === 3) {
-      await refreshAndDisplay();
+      if (currentScreen === 'main') {
+        await refreshMainMenuEvents();
+      } else {
+        await refreshAndDisplay();
+      }
       return;
     }
     
@@ -1027,7 +1046,11 @@ async function handleEvent(event: EvenHubEvent): Promise<void> {
     
     // Double-tap refresh (type 3)
     if (textType === 3) {
-      await refreshAndDisplay();
+      if (currentScreen === 'main') {
+        await refreshMainMenuEvents();
+      } else {
+        await refreshAndDisplay();
+      }
       return;
     }
     

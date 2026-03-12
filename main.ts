@@ -499,14 +499,38 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
 async function refreshMainMenuEvents(): Promise<void> {
   if (!bridge) return;
   
+  const panelTileWidth = 200;
+  const panelTileHeight = 100;
+  
+  // Clear both tiles simultaneously first
+  const clearCanvas = document.createElement('canvas');
+  clearCanvas.width = panelTileWidth;
+  clearCanvas.height = panelTileHeight;
+  const clearCtx = clearCanvas.getContext('2d');
+  if (clearCtx) {
+    clearCtx.fillStyle = '#000000';
+    clearCtx.fillRect(0, 0, panelTileWidth, panelTileHeight);
+    const clearBlob = await new Promise<Blob>((resolve) => clearCanvas.toBlob(resolve!, 'image/png'));
+    const clearBuffer = await clearBlob.arrayBuffer();
+    const clearData = Array.from(new Uint8Array(clearBuffer));
+    
+    // Send clear to both tiles at once
+    await Promise.all([
+      bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: 2, containerName: 'panel-tile-0', imageData: clearData })
+      ),
+      bridge.updateImageRawData(
+        new ImageRawDataUpdate({ containerID: 4, containerName: 'panel-tile-1', imageData: clearData })
+      ),
+    ]);
+  }
+  
   await fetchEvents();
   
   const now = Date.now();
   const activeEvents = allEvents.filter(e => e.startTime <= now).slice(0, 6);
-  const panelTileWidth = 200;
-  const panelTileHeight = 100;
   
-  // Only refresh the event rows, skip header
+  // Progressive load of event rows
   await sendCurrentEventsPanelTiled(activeEvents, panelTileWidth, panelTileHeight);
 }
 

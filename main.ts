@@ -739,7 +739,7 @@ async function showSplashAnimation(): Promise<void> {
   
   logStatus(`Playing ${frames.length} frames...`);
   
-  // Play all frames - no delay, let natural render time dictate speed
+  // Play all frames with minimal delay to ensure each frame is visible
   for (let i = 0; i < frames.length; i++) {
     logStatus(`Sending frame ${i + 1}...`);
     await bridge.updateImageRawData(
@@ -749,8 +749,12 @@ async function showSplashAnimation(): Promise<void> {
         imageData: frames[i] 
       })
     );
+    // Small delay to ensure frame is visible on hardware
+    await sleep(100);
   }
   
+  // Hold final frame briefly before proceeding
+  await sleep(200);
   logStatus('Splash animation complete');
 }
 

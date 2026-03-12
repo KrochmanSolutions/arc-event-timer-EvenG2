@@ -693,12 +693,13 @@ async function displayEventsList(items: string[], title: string, hint: string, s
 async function showSplashAnimation(): Promise<void> {
   if (!bridge) return;
   
-  const SPLASH_WIDTH = 200;
-  const SPLASH_HEIGHT = 100;
+  // Splash frames are 153x30 - container must match image size
+  const SPLASH_WIDTH = 153;
+  const SPLASH_HEIGHT = 30;
   
   logStatus('Starting splash animation...');
   
-  // Create container
+  // Create container - size must match image dimensions exactly
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
       containerTotalNum: 1,

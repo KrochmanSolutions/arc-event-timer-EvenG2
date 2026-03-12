@@ -376,7 +376,7 @@ async function sendHeaderWithHint(): Promise<void> {
       await bridge.updateImageRawData(
         new ImageRawDataUpdate({ containerID: 1, containerName: 'header', imageData })
       );
-      await sleep(100);
+      await sleep(50);
     }
     // Frame 3 remains as the final header - no additional update needed
   } catch (err) {
@@ -535,7 +535,7 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
     
     // Stage 1: Just the header (no events) - initialize BOTH tiles
     await renderAndSend(0, true, true);
-    await sleep(80);
+    await sleep(30);
     
     // Stage 2+: Add events one by one
     // Layout: header ~20px, events start at y=34, each row is 32px
@@ -544,7 +544,7 @@ async function sendCurrentEventsPanelTiled(events: GameEvent[], tileW: number, t
     const maxEvents = Math.min(events.length, 6);
     for (let i = 1; i <= maxEvents; i++) {
       await renderAndSend(i, true, true);
-      await sleep(80);
+      await sleep(30);
     }
   } catch (err) {
     console.error('[IMAGE] Tiled panel error:', err);

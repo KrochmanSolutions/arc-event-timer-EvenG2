@@ -696,6 +696,8 @@ async function showSplashAnimation(): Promise<void> {
   const SPLASH_WIDTH = 200;
   const SPLASH_HEIGHT = 100;
   
+  logStatus('Starting splash animation...');
+  
   // Create container
   await bridge.rebuildPageContainer(
     new RebuildPageContainer({
@@ -719,21 +721,37 @@ async function showSplashAnimation(): Promise<void> {
   
   for (const path of framePaths) {
     try {
+      logStatus(`Loading ${path}...`);
       const response = await fetch(path);
+      if (!response.ok) {
+        logStatus(`Failed to fetch ${path}: ${response.status}`);
+        return;
+      }
       const arrayBuffer = await response.arrayBuffer();
-      frames.push(Array.from(new Uint8Array(arrayBuffer)));
+      const imageData = Array.from(new Uint8Array(arrayBuffer));
+      logStatus(`Loaded ${path}: ${imageData.length} bytes`);
+      frames.push(imageData);
     } catch (err) {
-      console.error(`Failed to load ${path}:`, err);
+      logStatus(`Error loading ${path}: ${err}`);
       return;
     }
   }
   
+  logStatus(`Playing ${frames.length} frames...`);
+  
   // Play all frames - no delay, let natural render time dictate speed
-  for (const frameData of frames) {
+  for (let i = 0; i < frames.length; i++) {
+    logStatus(`Sending frame ${i + 1}...`);
     await bridge.updateImageRawData(
-      new ImageRawDataUpdate({ containerID: 1, containerName: 'splash-logo', imageData: frameData })
+      new ImageRawDataUpdate({ 
+        containerID: 1, 
+        containerName: 'splash-logo', 
+        imageData: frames[i] 
+      })
     );
   }
+  
+  logStatus('Splash animation complete');
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
